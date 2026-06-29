@@ -4,6 +4,8 @@ This public repository hosts the standalone Web Bluetooth console for Sivy ASC b
 
 The page is static. It does not contain firmware source code, signing keys, build outputs, or hardware-private files.
 
+The page logo is loaded from `assets/sivy_logo.svg`. The original DWG source is intentionally not included in this public repository.
+
 ## Public URL
 
 After GitHub Pages is enabled, the expected URL is:

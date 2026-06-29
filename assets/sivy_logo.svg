@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-labelledby="title desc">
+  <title id="title">Sivy logo</title>
+  <desc id="desc">Sivy ASC console brand mark.</desc>
+  <defs>
+    <linearGradient id="sivy-g" x1="28" y1="26" x2="150" y2="154" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00a676"/>
+      <stop offset="0.52" stop-color="#0071e3"/>
+      <stop offset="1" stop-color="#1d1d1f"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="40" fill="#ffffff"/>
+  <path d="M41 114c13 17 31 25 52 25 27 0 45-13 45-33 0-18-13-27-40-33l-15-3c-13-3-19-7-19-14 0-8 8-13 21-13 15 0 27 6 36 17l14-16c-11-14-27-22-49-22-26 0-44 13-44 34 0 18 13 28 39 33l15 3c14 3 20 7 20 14 0 8-8 13-23 13-17 0-30-7-40-20z" fill="url(#sivy-g)"/>
+  <path d="M54 119c10 12 23 18 39 18 26 0 43-12 43-31 0-16-11-24-37-30l-16-4c-14-3-21-8-21-16 0-10 9-16 24-16 15 0 27 5 37 17" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+</svg>
