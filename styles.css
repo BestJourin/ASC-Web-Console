@@ -67,39 +67,41 @@ button:disabled {
 .shell {
   width: min(1480px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 24px 0 32px;
+  padding: 18px 0 32px;
 }
 
 .topbar {
   display: grid;
-  grid-template-columns: 1fr auto minmax(300px, 440px) auto;
-  gap: 16px;
+  grid-template-columns: minmax(340px, 1fr) auto minmax(300px, 400px) auto;
+  gap: 14px;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 
 .brand-logo {
-  width: 58px;
-  height: 58px;
+  width: 118px;
+  height: 56px;
   flex: 0 0 auto;
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  object-fit: contain;
+  object-position: center;
+  border: 0;
+  border-radius: 10px;
   background: #fff;
-  box-shadow: var(--shadow);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .eyebrow {
-  margin: 0 0 2px;
+  margin: 0 0 4px;
   color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0;
 }
 
@@ -110,8 +112,9 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(28px, 3vw, 42px);
+  font-size: clamp(28px, 2.4vw, 36px);
   line-height: 1.05;
+  font-weight: 750;
 }
 
 h2 {
@@ -152,30 +155,36 @@ h2 {
 
 .runtime-bar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
-  gap: 10px;
-  margin: 0 0 18px;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
 }
 
 .runtime-item {
-  min-height: 58px;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px 12px;
-  background: #fff;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .runtime-item span {
-  display: block;
+  display: inline;
   color: var(--muted);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .runtime-item strong {
-  display: block;
-  margin-top: 7px;
-  font-size: 15px;
+  display: inline;
+  margin-top: 0;
+  font-size: 14px;
   line-height: 1.1;
+  text-align: right;
   overflow-wrap: anywhere;
 }
 
@@ -594,18 +603,22 @@ pre {
   }
 
   .brand-logo {
-    width: 48px;
+    width: 100px;
     height: 48px;
-    border-radius: 12px;
+    border-radius: 9px;
   }
 
   h1 {
-    font-size: 28px;
+    font-size: 29px;
   }
 
   .runtime-bar,
   .grid {
     gap: 10px;
+  }
+
+  .runtime-item {
+    min-height: 40px;
   }
 
   .panel {
