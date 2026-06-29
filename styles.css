@@ -571,3 +571,64 @@ pre {
     justify-content: flex-start;
   }
 }
+
+@media (hover: none) {
+  button {
+    min-height: 44px;
+  }
+
+  button:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    width: min(100% - 20px, 1480px);
+    padding: 12px 0 20px;
+  }
+
+  .topbar {
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .brand-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+  }
+
+  h1 {
+    font-size: 28px;
+  }
+
+  .runtime-bar,
+  .grid {
+    gap: 10px;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  .status-grid div {
+    min-height: 64px;
+  }
+
+  .button-row > button,
+  .sample-actions > button,
+  .actions > button {
+    flex: 1 1 138px;
+  }
+
+  .ota-meta,
+  .legend {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  pre {
+    max-height: 280px;
+  }
+}

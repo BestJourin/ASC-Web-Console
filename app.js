@@ -1,6 +1,6 @@
 'use strict';
 
-const WEB_CONSOLE_BUILD = '20260629-public-ble-access';
+const WEB_CONSOLE_BUILD = '20260629-mobile-ble';
 
 const UUIDS = {
   ascService: '41534300-7a6d-4ef9-9c6b-5c5940000001',
@@ -152,25 +152,48 @@ function runtimeOriginLabel() {
   return location.protocol.replace(':', '') || '--';
 }
 
+function detectClientPlatform() {
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const isIPadOS = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || isIPadOS;
+  const isAndroid = /Android/i.test(ua);
+  const isMobile = isIOS || isAndroid || /Mobile|Tablet/i.test(ua);
+  const isSamsung = /SamsungBrowser/i.test(ua);
+  const isEdge = /EdgA|EdgiOS|Edg\//i.test(ua);
+  const isChrome = /Chrome|CriOS|Chromium/i.test(ua) && !isEdge && !isSamsung;
+
+  return { isIOS, isAndroid, isMobile, isSamsung, isEdge, isChrome };
+}
+
 function updateRuntimeEnvironment() {
   const secure = window.isSecureContext === true;
   const hasBluetooth = !!navigator.bluetooth;
   const origin = runtimeOriginLabel();
   const insecureHttp = location.protocol === 'http:' && origin !== 'localhost';
   const localFile = location.protocol === 'file:';
+  const platform = detectClientPlatform();
 
   state.bluetoothReady = secure && hasBluetooth && !localFile;
   setRuntimeItem('runtimeOrigin', origin, insecureHttp || localFile ? 'warn' : 'ok');
   setRuntimeItem('runtimeSecurity', secure && !localFile ? '可用' : '不可用', secure && !localFile ? 'ok' : 'error');
   setRuntimeItem('runtimeBluetooth', hasBluetooth ? '可用' : '不可用', hasBluetooth ? 'ok' : 'error');
-  setRuntimeItem('runtimeAdapter', '本机 BLE', 'ok');
+  setRuntimeItem(
+    'runtimeAdapter',
+    platform.isIOS && !hasBluetooth ? 'iOS 不支持' : platform.isAndroid ? 'Android 本机 BLE' : '本机 BLE',
+    platform.isIOS && !hasBluetooth ? 'error' : 'ok',
+  );
 
   if (localFile) {
     log('Web Bluetooth disabled: serve this directory over HTTPS or http://localhost instead of opening index.html directly.');
   } else if (!secure) {
     log('Web Bluetooth disabled: open this page over HTTPS or localhost.');
+  } else if (platform.isIOS && !hasBluetooth) {
+    log('Web Bluetooth disabled: iPhone/iPad Safari and iOS Chrome do not expose Web Bluetooth. Use Android Chrome/Edge/Samsung Internet or desktop Chrome/Edge.');
   } else if (!hasBluetooth) {
-    log('Web Bluetooth disabled: use desktop Chrome/Edge with a local BLE adapter.');
+    log('Web Bluetooth disabled: use Android Chrome/Edge/Samsung Internet or desktop Chrome/Edge with a local BLE adapter.');
+  } else if (platform.isMobile) {
+    log(`Mobile Web Bluetooth ready; nearby devices are scanned from this ${platform.isAndroid ? 'Android' : 'mobile'} device (${origin}).`);
   } else {
     log(`Web Bluetooth ready on this browser; nearby devices are scanned from this computer (${origin}).`);
   }
@@ -546,7 +569,7 @@ async function connect() {
   }
 
   if (!navigator.bluetooth) {
-    throw new Error('当前浏览器不支持 Web Bluetooth，请使用桌面版 Chrome 或 Edge');
+    throw new Error('当前浏览器不支持 Web Bluetooth，请使用 Android Chrome/Edge/Samsung Internet 或桌面版 Chrome/Edge');
   }
 
   log(`Opening BLE chooser: ${describeDeviceFilter()}`);

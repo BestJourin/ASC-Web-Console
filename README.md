@@ -55,6 +55,15 @@ BLE adapter
 
 The connect button is enabled only when the browser provides a secure context and Web Bluetooth.
 
+Mobile BLE support:
+
+| Platform | Support | Notes |
+| --- | --- | --- |
+| Android Chrome / Edge / Samsung Internet | Supported when Web Bluetooth is available | Use the HTTPS Pages URL; BLE scanning uses the phone's local adapter. |
+| iPhone / iPad Safari | Not supported | iOS Safari does not expose Web Bluetooth. |
+| iPhone / iPad Chrome / Edge | Not supported | iOS third-party browsers use WebKit and normally do not expose Web Bluetooth. |
+| Desktop Chrome / Edge | Recommended | Most stable for OTA and register bring-up. |
+
 ## Device Selection
 
 The page offers three scan modes:
