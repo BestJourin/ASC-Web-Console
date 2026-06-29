@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-store, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sivy ASC Console</title>
+  <link rel="stylesheet" href="./styles.css?v=20260629-public-ble-access">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Sivy ASC V0</p>
+        <h1>Control Console</h1>
+      </div>
+      <div class="connection">
+        <span id="connectionDot" class="dot"></span>
+        <span id="connectionText">未连接</span>
+      </div>
+      <div class="device-picker">
+        <label>扫描范围
+          <select id="deviceFilterMode">
+            <option value="allDevices" selected>全部设备</option>
+            <option value="namePrefix">名称前缀</option>
+            <option value="ascService">目标服务</option>
+          </select>
+        </label>
+        <label id="namePrefixLabel">前缀
+          <input id="deviceNamePrefix" type="text" value="Sivy_ASC">
+        </label>
+      </div>
+      <div class="actions">
+        <button id="connectBtn" class="primary">连接设备</button>
+        <button id="disconnectBtn">断开</button>
+      </div>
+    </header>
+
+    <section class="runtime-bar" aria-label="运行环境">
+      <div class="runtime-item">
+        <span>页面来源</span>
+        <strong id="runtimeOrigin">--</strong>
+      </div>
+      <div class="runtime-item">
+        <span>安全上下文</span>
+        <strong id="runtimeSecurity">--</strong>
+      </div>
+      <div class="runtime-item">
+        <span>Web Bluetooth</span>
+        <strong id="runtimeBluetooth">--</strong>
+      </div>
+      <div class="runtime-item">
+        <span>BLE 适配器</span>
+        <strong id="runtimeAdapter">本机 BLE</strong>
+      </div>
+    </section>
+
+    <section class="grid">
+      <section class="panel status-panel">
+        <div class="panel-head">
+          <h2>状态</h2>
+          <button id="refreshBtn" class="icon-button" title="刷新状态">↻</button>
+        </div>
+        <div class="status-grid">
+          <div><span>电源</span><strong id="powerValue">--</strong></div>
+          <div><span>BLE</span><strong id="bleValue">--</strong></div>
+          <div><span>LED</span><strong id="ledValue">--</strong></div>
+          <div><span>采样通知</span><strong id="notifyValue">--</strong></div>
+          <div><span>ADC OK</span><strong id="adcOkValue">0</strong></div>
+          <div><span>ADC ERR</span><strong id="adcErrValue">0</strong></div>
+          <div><span>DAC OK</span><strong id="dacOkValue">0</strong></div>
+          <div><span>I2C ERR</span><strong id="i2cErrValue">0</strong></div>
+          <div><span>APP STATE</span><strong id="appStateValue">--</strong></div>
+          <div><span>PROFILE</span><strong id="profileValue">--</strong></div>
+          <div><span>QUEUE</span><strong id="queueValue">0</strong></div>
+          <div><span>BLE DROP</span><strong id="bleDropValue">0/0</strong></div>
+        </div>
+        <div class="button-row">
+          <button id="powerOnBtn">Power On</button>
+          <button id="powerOffBtn">Power Off</button>
+          <button id="startArmBtn" class="primary">Start Arm</button>
+          <button id="stopArmBtn">Stop Arm</button>
+          <button id="lowPowerBtn">Low Power</button>
+          <button id="dacProbeBtn">DAC Probe</button>
+          <button id="clearDiagBtn">清计数</button>
+        </div>
+      </section>
+
+      <section class="panel config-panel">
+        <div class="panel-head">
+          <h2>参数</h2>
+          <button id="readConfigBtn">读取</button>
+        </div>
+        <div class="segmented" role="group" aria-label="输入模式">
+          <button class="segment active" data-mode="0">双极性</button>
+          <button class="segment" data-mode="1">单边</button>
+        </div>
+        <label class="toggle">
+          <span>ADC Data Notify</span>
+          <input id="notifyToggle" type="checkbox" checked>
+        </label>
+        <label class="toggle">
+          <span>UART Sample Log</span>
+          <input id="sampleLogToggle" type="checkbox" checked>
+        </label>
+        <div class="dac-grid">
+          <label>A PULSE_DN<input id="dacA" type="number" min="0" max="3300" step="1" value="1750"></label>
+          <label>B PULSE_UP<input id="dacB" type="number" min="0" max="3300" step="1" value="1550"></label>
+          <label>C BIAS<input id="dacC" type="number" min="0" max="3300" step="1" value="1650"></label>
+          <label>D DIFF<input id="dacD" type="number" min="0" max="3300" step="1" value="1650"></label>
+        </div>
+        <div class="button-row">
+          <button id="writeConfigBtn">写入配置</button>
+          <button id="applyDacBtn" class="primary">应用 DAC</button>
+          <button id="applyConfigBtn">Apply Config</button>
+          <button id="dacDefaultBtn">默认值</button>
+        </div>
+      </section>
+
+      <section class="panel profile-panel">
+        <div class="panel-head">
+          <h2>ASC Profile</h2>
+          <button id="applyProfileBtn">Apply Profile</button>
+        </div>
+        <label class="toggle">
+          <span>Enable register profile</span>
+          <input id="profileEnableToggle" type="checkbox">
+        </label>
+        <label class="toggle">
+          <span>Verify after write</span>
+          <input id="profileVerifyToggle" type="checkbox" checked>
+        </label>
+        <div id="profileEntries" class="profile-entries"></div>
+      </section>
+
+      <section class="panel reg-panel">
+        <div class="panel-head">
+          <h2>Register</h2>
+          <button id="regReadBtn" class="primary">Read</button>
+        </div>
+        <div class="reg-grid">
+          <label>Target
+            <select id="regTarget">
+              <option value="1">ASC I2C</option>
+              <option value="3">DAC Config</option>
+              <option value="4">MCU Status</option>
+              <option value="5">Diagnostics</option>
+              <option value="6">ASC Profile</option>
+            </select>
+          </label>
+          <label>Width
+            <select id="regWidth">
+              <option value="2">16-bit</option>
+              <option value="4">32-bit</option>
+              <option value="1">8-bit</option>
+            </select>
+          </label>
+          <label>Address<input id="regAddr" type="text" value="0x00"></label>
+          <label>Value<input id="regValue" type="text" value="0x0000"></label>
+          <label>Mask<input id="regMask" type="text" value="0xffff"></label>
+        </div>
+        <div class="button-row">
+          <button id="regWriteBtn">Write</button>
+          <button id="regUpdateBtn">Update Bits</button>
+        </div>
+        <div class="reg-result" id="regResult">REG_RSP --</div>
+      </section>
+
+      <section class="panel asc-test-panel">
+        <div class="panel-head">
+          <h2>ASC Register Test</h2>
+          <div class="sample-actions">
+            <button id="ascTestExportBtn">Export CSV</button>
+            <button id="ascTestClearBtn">Clear</button>
+          </div>
+        </div>
+        <div class="asc-test-controls">
+          <label>Preset
+            <select id="ascTestPreset">
+              <option value="basic">Basic Reads</option>
+              <option value="profile">Current Profile</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>Read Registers
+            <input id="ascTestReadList" type="text" value="0x00, 0x08, 0x10-0x13, 0x20, 0x21">
+          </label>
+          <label class="toggle compact-toggle">
+            <span>Power On</span>
+            <input id="ascTestPowerOn" type="checkbox" checked>
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="ascTestReadBtn" class="primary">Run Reads</button>
+          <button id="ascTestFullBtn">Run Flow</button>
+        </div>
+        <div class="asc-write-box">
+          <label class="toggle compact-toggle">
+            <span>Enable Write Verify</span>
+            <input id="ascTestWriteEnable" type="checkbox">
+          </label>
+          <label>Safe Reg<input id="ascTestWriteAddr" type="text" value="0x00"></label>
+          <label>Mask<input id="ascTestWriteMask" type="text" value="0x0000"></label>
+          <label>Test Value<input id="ascTestWriteValue" type="text" value="0x0000"></label>
+          <button id="ascTestWriteBtn">Write Verify</button>
+        </div>
+        <div class="table-wrap">
+          <table class="test-table">
+            <thead>
+              <tr>
+                <th>Step</th>
+                <th>Op</th>
+                <th>Addr</th>
+                <th>Expected</th>
+                <th>Actual</th>
+                <th>Status</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="ascTestRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel sample-panel">
+        <div class="panel-head">
+          <h2>采样</h2>
+          <div class="sample-actions">
+            <button id="sampleCh0Btn">CH0</button>
+            <button id="sampleCh1Btn">CH1</button>
+            <button id="clearSamplesBtn">清图</button>
+          </div>
+        </div>
+        <canvas id="sampleCanvas" width="960" height="420"></canvas>
+        <div class="legend">
+          <span><i class="line ch0"></i>CH0</span>
+          <span><i class="line ch1"></i>CH1</span>
+          <span id="sampleCount">0 samples</span>
+          <span id="latestSample">latest --</span>
+        </div>
+      </section>
+
+      <section class="panel ota-panel">
+        <div class="panel-head">
+          <h2>OTA</h2>
+          <button id="imageStateBtn">镜像状态</button>
+        </div>
+        <input id="otaFile" type="file" accept=".zip,.bin">
+        <div class="ota-meta">
+          <span id="otaFileName">未选择文件</span>
+          <span id="otaFileSize">--</span>
+        </div>
+        <progress id="otaProgress" value="0" max="100"></progress>
+        <div class="ota-progress-text" id="otaProgressText">idle</div>
+        <div class="button-row">
+          <button id="otaUploadBtn" class="primary">上传并测试</button>
+          <button id="resetBtn">Reset</button>
+        </div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="panel-head">
+        <h2>事件</h2>
+        <button id="clearLogBtn">清空</button>
+        </div>
+        <pre id="logView"></pre>
+      </section>
+    </section>
+  </main>
+
+  <script src="./app.js?v=20260629-public-ble-access"></script>
+</body>
+</html>
