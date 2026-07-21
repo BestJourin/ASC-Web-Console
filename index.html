@@ -419,7 +419,10 @@
           <h2>OTA</h2>
           <button id="imageStateBtn">镜像状态</button>
         </div>
-        <input id="otaFile" type="file" accept=".zip,.bin">
+        <div class="ota-file-picker">
+          <button id="otaChooseFileBtn" type="button">Choose OTA file</button>
+          <input id="otaFile" class="visually-hidden" type="file" accept=".zip,.bin">
+        </div>
         <div class="ota-meta">
           <span id="otaFileName">未选择文件</span>
           <span id="otaFileSize">--</span>
@@ -442,6 +445,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260721-i18n-logfix"></script>
+  <script src="./app.js?v=20260721-i18n-file-picker"></script>
 </body>
 </html>

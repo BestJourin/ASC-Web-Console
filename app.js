@@ -1,6 +1,6 @@
 'use strict';
 
-const WEB_CONSOLE_BUILD = '20260721-i18n-logfix';
+const WEB_CONSOLE_BUILD = '20260721-i18n-file-picker';
 
 const UUIDS = {
   ascService: '41534300-7a6d-4ef9-9c6b-5c5940000001',
@@ -249,6 +249,7 @@ const LANGUAGE_TEXT_EN = Object.freeze({
   '调整滑块后会实时计算 PW_CTRL；写入前需要勾选确认。': 'Adjust the slider to calculate PW_CTRL live; confirmation is required before writing.',
   '采样': 'Sampling', '清图': 'Clear plot', '0 个采样': '0 samples', '最新值：--': 'Latest: --',
   '镜像状态': 'Image state', '未选择文件': 'No file selected', '空闲': 'Idle', '上传并测试': 'Upload and test',
+  '选择 OTA 文件': 'Choose OTA file',
   '重启': 'Restart', '事件': 'Events', '0x3：1x（默认）': '0x3: 1x (default)',
   '0x8：0.25x（低噪声档）': '0x8: 0.25x (low-noise)', '0x9：0.333x（低噪声档）': '0x9: 0.333x (low-noise)',
   '0xA：0.4x（低噪声档）': '0xA: 0.4x (low-noise)', '0xB：0.5x（低噪声档）': '0xB: 0.5x (low-noise)',
@@ -354,6 +355,7 @@ function localizeAttributes() {
 function localizeOtaPanel() {
   const english = activeLanguage === 'en';
   $('imageStateBtn').textContent = english ? 'Image state' : '镜像状态';
+  $('otaChooseFileBtn').textContent = english ? 'Choose OTA file' : '选择 OTA 文件';
   $('otaUploadBtn').textContent = english ? 'Upload and test' : '上传并测试';
   $('resetBtn').textContent = english ? 'Restart' : '重启';
   if (!$('otaFile').files?.length) $('otaFileName').textContent = english ? 'No file selected' : '未选择文件';
@@ -2716,6 +2718,7 @@ function bindUi() {
   $('sampleCh1Btn').addEventListener('click', () => run(() => ctrl(CTRL.FORCE_SAMPLE, 1)));
   $('resetBtn').addEventListener('click', () => run(resetBySmp));
   $('imageStateBtn').addEventListener('click', () => run(imageState));
+  $('otaChooseFileBtn').addEventListener('click', () => $('otaFile').click());
   $('otaUploadBtn').addEventListener('click', () => run(uploadOta));
   $('clearLogBtn').addEventListener('click', () => { logView.textContent = ''; });
   $('clearSamplesBtn').addEventListener('click', () => {
