@@ -1,6 +1,6 @@
 'use strict';
 
-const WEB_CONSOLE_BUILD = '20260721-ch1-vth-mv';
+const WEB_CONSOLE_BUILD = '20260721-i18n-ota';
 
 const UUIDS = {
   ascService: '41534300-7a6d-4ef9-9c6b-5c5940000001',
@@ -350,10 +350,22 @@ function localizeAttributes() {
   $('languageSelect').options[1].textContent = activeLanguage === 'en' ? 'Chinese' : '中文';
 }
 
+function localizeOtaPanel() {
+  const english = activeLanguage === 'en';
+  $('imageStateBtn').textContent = english ? 'Image state' : '镜像状态';
+  $('otaUploadBtn').textContent = english ? 'Upload and test' : '上传并测试';
+  $('resetBtn').textContent = english ? 'Restart' : '重启';
+  if (!$('otaFile').files?.length) $('otaFileName').textContent = english ? 'No file selected' : '未选择文件';
+  if (normalizeLanguageText($('otaProgressText').textContent) === (english ? '空闲' : 'Idle')) {
+    $('otaProgressText').textContent = english ? 'Idle' : '空闲';
+  }
+}
+
 function applyLanguage(language, persist = true) {
   activeLanguage = language === 'zh' ? 'zh' : 'en';
   localizeAttributes();
   localizeDocumentText();
+  localizeOtaPanel();
   if (persist) {
     try {
       localStorage.setItem(LANGUAGE_STORAGE_KEY, activeLanguage);
