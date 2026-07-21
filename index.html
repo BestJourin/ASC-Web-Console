@@ -6,17 +6,17 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sivy ASC Console</title>
-  <link rel="stylesheet" href="./styles.css?v=20260629-header-ui">
+  <title>Sivy ASC CH1 寄存器控制台</title>
+  <link rel="stylesheet" href="./styles.css?v=20260721-ch1-register-control">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
       <div class="brand-lockup">
-        <img class="brand-logo" src="./assets/sivy_logo.svg?v=20260629-logo" alt="Sivy logo">
+        <img class="brand-logo" src="./assets/sivy_logo.svg?v=20260629-logo" alt="Sivy 标志">
         <div>
-          <p class="eyebrow">Sivy ASC V0</p>
-          <h1>Control Console</h1>
+          <p class="eyebrow">Sivy ASC CH1 位域配置</p>
+          <h1>通道一寄存器控制台</h1>
         </div>
       </div>
       <div class="connection">
@@ -32,7 +32,7 @@
           </select>
         </label>
         <label id="namePrefixLabel">前缀
-          <input id="deviceNamePrefix" type="text" value="Sivy_ASC">
+          <input id="deviceNamePrefix" type="text" value="Sivy_ASC_Test">
         </label>
       </div>
       <div class="actions">
@@ -51,12 +51,12 @@
         <strong id="runtimeSecurity">--</strong>
       </div>
       <div class="runtime-item">
-        <span>Web Bluetooth</span>
+        <span>网页蓝牙</span>
         <strong id="runtimeBluetooth">--</strong>
       </div>
       <div class="runtime-item">
-        <span>BLE 适配器</span>
-        <strong id="runtimeAdapter">本机 BLE</strong>
+        <span>蓝牙适配器</span>
+        <strong id="runtimeAdapter">本机蓝牙</strong>
       </div>
     </section>
 
@@ -68,25 +68,25 @@
         </div>
         <div class="status-grid">
           <div><span>电源</span><strong id="powerValue">--</strong></div>
-          <div><span>BLE</span><strong id="bleValue">--</strong></div>
-          <div><span>LED</span><strong id="ledValue">--</strong></div>
+          <div><span>蓝牙</span><strong id="bleValue">--</strong></div>
+          <div><span>指示灯</span><strong id="ledValue">--</strong></div>
           <div><span>采样通知</span><strong id="notifyValue">--</strong></div>
-          <div><span>ADC OK</span><strong id="adcOkValue">0</strong></div>
-          <div><span>ADC ERR</span><strong id="adcErrValue">0</strong></div>
-          <div><span>DAC OK</span><strong id="dacOkValue">0</strong></div>
-          <div><span>I2C ERR</span><strong id="i2cErrValue">0</strong></div>
-          <div><span>APP STATE</span><strong id="appStateValue">--</strong></div>
-          <div><span>PROFILE</span><strong id="profileValue">--</strong></div>
-          <div><span>QUEUE</span><strong id="queueValue">0</strong></div>
-          <div><span>BLE DROP</span><strong id="bleDropValue">0/0</strong></div>
+          <div><span>ADC 成功</span><strong id="adcOkValue">0</strong></div>
+          <div><span>ADC 错误</span><strong id="adcErrValue">0</strong></div>
+          <div><span>DAC 成功</span><strong id="dacOkValue">0</strong></div>
+          <div><span>I2C 错误</span><strong id="i2cErrValue">0</strong></div>
+          <div><span>应用状态</span><strong id="appStateValue">--</strong></div>
+          <div><span>配置档</span><strong id="profileValue">--</strong></div>
+          <div><span>队列</span><strong id="queueValue">0</strong></div>
+          <div><span>蓝牙丢弃</span><strong id="bleDropValue">0/0</strong></div>
         </div>
         <div class="button-row">
-          <button id="powerOnBtn">Power On</button>
-          <button id="powerOffBtn">Power Off</button>
-          <button id="startArmBtn" class="primary">Start Arm</button>
-          <button id="stopArmBtn">Stop Arm</button>
-          <button id="lowPowerBtn">Low Power</button>
-          <button id="dacProbeBtn">DAC Probe</button>
+          <button id="powerOnBtn">打开电源</button>
+          <button id="powerOffBtn">关闭电源</button>
+          <button id="startArmBtn" class="primary">开始布防</button>
+          <button id="stopArmBtn">停止布防</button>
+          <button id="lowPowerBtn">低功耗</button>
+          <button id="dacProbeBtn">探测 DAC</button>
           <button id="clearDiagBtn">清计数</button>
         </div>
       </section>
@@ -101,38 +101,38 @@
           <button class="segment" data-mode="1">单边</button>
         </div>
         <label class="toggle">
-          <span>ADC Data Notify</span>
+          <span>ADC 数据通知</span>
           <input id="notifyToggle" type="checkbox" checked>
         </label>
         <label class="toggle">
-          <span>UART Sample Log</span>
+          <span>UART 采样日志</span>
           <input id="sampleLogToggle" type="checkbox" checked>
         </label>
         <div class="dac-grid">
-          <label>A PULSE_DN<input id="dacA" type="number" min="0" max="3300" step="1" value="1750"></label>
-          <label>B PULSE_UP<input id="dacB" type="number" min="0" max="3300" step="1" value="1550"></label>
-          <label>C BIAS<input id="dacC" type="number" min="0" max="3300" step="1" value="1650"></label>
-          <label>D DIFF<input id="dacD" type="number" min="0" max="3300" step="1" value="1650"></label>
+          <label>A 脉冲下阈值<input id="dacA" type="number" min="0" max="3300" step="1" value="1750"></label>
+          <label>B 脉冲上阈值<input id="dacB" type="number" min="0" max="3300" step="1" value="1550"></label>
+          <label>C 偏置<input id="dacC" type="number" min="0" max="3300" step="1" value="1650"></label>
+          <label>D 差分<input id="dacD" type="number" min="0" max="3300" step="1" value="1650"></label>
         </div>
         <div class="button-row">
           <button id="writeConfigBtn">写入配置</button>
           <button id="applyDacBtn" class="primary">应用 DAC</button>
-          <button id="applyConfigBtn">Apply Config</button>
+          <button id="applyConfigBtn">应用配置</button>
           <button id="dacDefaultBtn">默认值</button>
         </div>
       </section>
 
       <section class="panel profile-panel">
         <div class="panel-head">
-          <h2>ASC Profile</h2>
-          <button id="applyProfileBtn">Apply Profile</button>
+          <h2>ASC 配置档</h2>
+          <button id="applyProfileBtn">应用配置档</button>
         </div>
         <label class="toggle">
-          <span>Enable register profile</span>
+          <span>启用寄存器配置档</span>
           <input id="profileEnableToggle" type="checkbox">
         </label>
         <label class="toggle">
-          <span>Verify after write</span>
+          <span>写入后校验</span>
           <input id="profileVerifyToggle" type="checkbox" checked>
         </label>
         <div id="profileEntries" class="profile-entries"></div>
@@ -140,89 +140,251 @@
 
       <section class="panel reg-panel">
         <div class="panel-head">
-          <h2>Register</h2>
-          <button id="regReadBtn" class="primary">Read</button>
+          <h2>寄存器</h2>
+          <button id="regReadBtn" class="primary">读取</button>
         </div>
         <div class="reg-grid">
-          <label>Target
+          <label>目标
             <select id="regTarget">
               <option value="1">ASC I2C</option>
-              <option value="3">DAC Config</option>
-              <option value="4">MCU Status</option>
-              <option value="5">Diagnostics</option>
-              <option value="6">ASC Profile</option>
+              <option value="3">DAC 配置</option>
+              <option value="4">MCU 状态</option>
+              <option value="5">诊断计数</option>
+              <option value="6">ASC 配置档</option>
             </select>
           </label>
-          <label>Width
+          <label>数据宽度
             <select id="regWidth">
-              <option value="2">16-bit</option>
-              <option value="4">32-bit</option>
-              <option value="1">8-bit</option>
+              <option value="2">16 位</option>
+              <option value="4">32 位</option>
+              <option value="1">8 位</option>
             </select>
           </label>
-          <label>Address<input id="regAddr" type="text" value="0x00"></label>
-          <label>Value<input id="regValue" type="text" value="0x0000"></label>
-          <label>Mask<input id="regMask" type="text" value="0xffff"></label>
+          <label>地址<input id="regAddr" type="text" value="0x00"></label>
+          <label>数值<input id="regValue" type="text" value="0x0000"></label>
+          <label>掩码<input id="regMask" type="text" value="0xffff"></label>
         </div>
         <div class="button-row">
-          <button id="regWriteBtn">Write</button>
-          <button id="regUpdateBtn">Update Bits</button>
+          <button id="regWriteBtn">写入</button>
+          <button id="regUpdateBtn">更新位</button>
         </div>
         <div class="reg-result" id="regResult">REG_RSP --</div>
       </section>
 
       <section class="panel asc-test-panel">
         <div class="panel-head">
-          <h2>ASC Register Test</h2>
+          <h2>ASC 寄存器测试</h2>
           <div class="sample-actions">
-            <button id="ascTestExportBtn">Export CSV</button>
-            <button id="ascTestClearBtn">Clear</button>
+            <button id="ascTestExportBtn">导出 CSV</button>
+            <button id="ascTestClearBtn">清空</button>
           </div>
         </div>
         <div class="asc-test-controls">
-          <label>Preset
+          <label>预设
             <select id="ascTestPreset">
-              <option value="basic">Basic Reads</option>
-              <option value="profile">Current Profile</option>
-              <option value="custom">Custom</option>
+              <option value="basic">基础读取</option>
+              <option value="profile">当前配置档</option>
+              <option value="custom">自定义</option>
             </select>
           </label>
-          <label>Read Registers
+          <label>读取寄存器
             <input id="ascTestReadList" type="text" value="0x00, 0x08, 0x10-0x13, 0x20, 0x21">
           </label>
           <label class="toggle compact-toggle">
-            <span>Power On</span>
+            <span>打开电源</span>
             <input id="ascTestPowerOn" type="checkbox" checked>
           </label>
         </div>
         <div class="button-row">
-          <button id="ascTestReadBtn" class="primary">Run Reads</button>
-          <button id="ascTestFullBtn">Run Flow</button>
+          <button id="ascTestReadBtn" class="primary">执行读取</button>
+          <button id="ascTestFullBtn">执行完整流程</button>
         </div>
         <div class="asc-write-box">
           <label class="toggle compact-toggle">
-            <span>Enable Write Verify</span>
+            <span>启用写入校验</span>
             <input id="ascTestWriteEnable" type="checkbox">
           </label>
-          <label>Safe Reg<input id="ascTestWriteAddr" type="text" value="0x00"></label>
-          <label>Mask<input id="ascTestWriteMask" type="text" value="0x0000"></label>
-          <label>Test Value<input id="ascTestWriteValue" type="text" value="0x0000"></label>
-          <button id="ascTestWriteBtn">Write Verify</button>
+          <label>安全寄存器<input id="ascTestWriteAddr" type="text" value="0x00"></label>
+          <label>掩码<input id="ascTestWriteMask" type="text" value="0x0000"></label>
+          <label>测试值<input id="ascTestWriteValue" type="text" value="0x0000"></label>
+          <button id="ascTestWriteBtn">写入校验</button>
         </div>
         <div class="table-wrap">
           <table class="test-table">
             <thead>
               <tr>
-                <th>Step</th>
-                <th>Op</th>
-                <th>Addr</th>
-                <th>Expected</th>
-                <th>Actual</th>
-                <th>Status</th>
-                <th>Note</th>
+                <th>步骤</th>
+                <th>操作</th>
+                <th>地址</th>
+                <th>期望值</th>
+                <th>实际值</th>
+                <th>状态</th>
+                <th>说明</th>
               </tr>
             </thead>
             <tbody id="ascTestRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel sivy-test-panel">
+        <div class="panel-head">
+          <h2>Sivy I2C 参考测试</h2>
+          <div class="sample-actions">
+            <button id="sivyTestExportBtn">导出 CSV</button>
+            <button id="sivyTestClearBtn">清空</button>
+          </div>
+        </div>
+        <p class="sivy-test-description">
+          由固件读取参考文件中的全部 29 个寄存器并在设备侧比较；网页显示逐项通知和最终通过/失败汇总。
+        </p>
+        <div class="button-row">
+          <button id="sivyTestSnapshotBtn" class="primary">执行只读快照</button>
+        </div>
+        <div class="sivy-init-box">
+          <label class="toggle compact-toggle">
+            <span>允许写 PW_CTRL（CPW_CTRL）[0x38] = 0x36DB</span>
+            <input id="sivyTestInitConfirm" type="checkbox">
+          </label>
+          <button id="sivyTestInitWriteBtn">执行选定的初始化写入</button>
+        </div>
+        <div id="sivyTestSummary" class="sivy-test-summary idle">等待固件测试结果</div>
+        <div class="table-wrap">
+          <table class="test-table">
+            <thead>
+              <tr>
+                <th>序号</th>
+                <th>名称</th>
+                <th>寄存器</th>
+                <th>期望值</th>
+                <th>实际值</th>
+                <th>结果</th>
+                <th>匹配/不匹配/I2C 错误</th>
+              </tr>
+            </thead>
+            <tbody id="sivyTestRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel ch1-control-panel">
+        <div class="panel-head">
+          <h2>CH1 寄存器配置</h2>
+          <div class="sample-actions">
+            <button id="ch1ReadBtn" class="primary">读取 CH1 并反解</button>
+            <button id="ch1WriteBtn">写入并回读校验</button>
+            <button id="ch1ExportBtn">导出 CSV</button>
+            <button id="ch1ClearBtn">清空结果</button>
+          </div>
+        </div>
+        <p class="ch1-control-description">
+          控件只覆盖 CH1 的可写位：CH1_CTRL[0x16]、CH1_FEAT[0x18]、CH1_AVG_WORKWIN[0x1A]、CH1_AVG_WAITWIN[0x1C]。
+          页面实时计算位域值，并使用掩码更新保留位不变。
+        </p>
+        <div class="ch1-config-grid">
+          <label class="toggle"><span>CH_EN（bit 0）</span><input id="ch1Enable" type="checkbox" checked></label>
+          <label>PGA_GAIN（bits 5:2）
+            <select id="ch1PgaGain">
+              <option value="0">0x0：0.5x</option><option value="1">0x1：0.667x</option>
+              <option value="2">0x2：0.8x</option><option value="3" selected>0x3：1x（默认）</option>
+              <option value="4">0x4：1.333x</option><option value="5">0x5：2x</option>
+              <option value="6">0x6：2.667x</option><option value="7">0x7：4x</option>
+              <option value="8">0x8：0.25x（低噪声档）</option><option value="9">0x9：0.333x（低噪声档）</option>
+              <option value="10">0xA：0.4x（低噪声档）</option><option value="11">0xB：0.5x（低噪声档）</option>
+              <option value="12">0xC：0.667x（低噪声档）</option><option value="13">0xD：1x（低噪声档）</option>
+              <option value="14">0xE：1.333x（低噪声档）</option><option value="15">0xF：2x（低噪声档）</option>
+            </select>
+          </label>
+          <label>阈值电压 VTH（mV，bits 15:8）<input id="ch1VthMv" type="number" min="8" max="2048" step="8" value="8" title="仅支持 8 mV 整数档；页面会自动换算 VTH 原始码"></label>
+          <label>特征模式（FEAT_SEL，bit 0）
+            <select id="ch1FeatSel"><option value="0" selected>脉冲时间戳</option><option value="1">窗口内周期均值</option></select>
+          </label>
+          <label class="toggle"><span>均值触发（AVG_TRG_EN，bit 1）</span><input id="ch1AvgTriggerEnable" type="checkbox"></label>
+          <label>均值触发边沿（AVG_TRG_HA，bits 3:2）
+            <select id="ch1AvgTriggerEdge"><option value="0" selected>上升沿</option><option value="1">下降沿</option><option value="2">上升沿或下降沿</option></select>
+          </label>
+          <label>工作窗口（bits 11:0）<input id="ch1WorkWindow" type="number" min="0" max="4095" step="1" value="0"></label>
+          <label>等待窗口（bits 11:0）<input id="ch1WaitWindow" type="number" min="0" max="4095" step="1" value="0"></label>
+        </div>
+        <div class="ch1-write-options">
+          <label class="toggle compact-toggle"><span>读写前打开 ASC 外部电源</span><input id="ch1PowerOn" type="checkbox" checked></label>
+          <label class="toggle compact-toggle"><span>确认写入 CH1 可写位</span><input id="ch1WriteConfirm" type="checkbox"></label>
+        </div>
+        <p id="ch1DecodeWarning" class="ch1-decode-warning"></p>
+        <div class="table-wrap">
+          <table class="test-table ch1-preview-table">
+            <thead><tr><th>寄存器</th><th>地址</th><th>可写掩码</th><th>计算值</th><th>位域计算</th></tr></thead>
+            <tbody id="ch1PreviewRows"></tbody>
+          </table>
+        </div>
+        <div id="ch1Summary" class="ch1-summary idle">调整控件后会实时显示计算寄存器值；写入前需要勾选确认。</div>
+        <div class="table-wrap">
+          <table class="test-table">
+            <thead><tr><th>步骤</th><th>寄存器</th><th>地址</th><th>掩码</th><th>期望值</th><th>实际值</th><th>结果</th><th>说明</th></tr></thead>
+            <tbody id="ch1ResultRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel power-control-panel">
+        <div class="panel-head">
+          <h2>ASC 功耗控制器</h2>
+          <div class="sample-actions">
+            <button id="powerReadBtn" class="primary">读取并反解</button>
+            <button id="powerWriteBtn">应用挡位并回读</button>
+            <button id="powerExportBtn">导出 CSV</button>
+            <button id="powerClearBtn">清空结果</button>
+          </div>
+        </div>
+        <p class="power-control-description">
+          一个联动滑块同步配置 PW_CTRL（旧名 CPW_CTRL）[0x38] 的全局、输入运放、PGA、采样运放和比较器功耗。
+          每档对应 25% 至 200% 的模拟功耗比例；页面通过 UPDATE_BITS 掩码 <code>0x7FFF</code> 写入，不修改保留的 bit 15。
+        </p>
+        <div class="power-slider-card">
+          <div class="power-slider-heading">
+            <label for="powerLevel">功耗挡位（五路联动）</label>
+            <output id="powerLevelLabel" class="power-level-label">100%（档位 3 / 0b011）</output>
+          </div>
+          <input id="powerLevel" class="power-level-slider" type="range" min="0" max="7" step="1" value="3" list="powerLevelTicks">
+          <datalist id="powerLevelTicks">
+            <option value="0" label="25%"></option><option value="1" label="50%"></option>
+            <option value="2" label="75%"></option><option value="3" label="100%"></option>
+            <option value="4" label="125%"></option><option value="5" label="150%"></option>
+            <option value="6" label="175%"></option><option value="7" label="200%"></option>
+          </datalist>
+          <div class="power-scale" aria-hidden="true">
+            <span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+            <span>125%</span><span>150%</span><span>175%</span><span>200%</span>
+          </div>
+          <p id="powerRegisterPreview" class="power-register-preview"></p>
+        </div>
+        <div class="power-stage-grid" aria-live="polite">
+          <article id="powerStagePwrCtl" class="power-stage">
+            <div><strong>PWR_CTL</strong><span>bits 2:0 · 全局</span></div><output id="powerPwrCtlValue">100%</output><code id="powerPwrCtlCode">0b011</code>
+          </article>
+          <article id="powerStageAmpIn" class="power-stage">
+            <div><strong>PW_AMPIN</strong><span>bits 5:3 · 输入运放</span></div><output id="powerAmpInValue">100%</output><code id="powerAmpInCode">0b011</code>
+          </article>
+          <article id="powerStagePga" class="power-stage">
+            <div><strong>PW_PGA</strong><span>bits 8:6 · PGA</span></div><output id="powerPgaValue">100%</output><code id="powerPgaCode">0b011</code>
+          </article>
+          <article id="powerStageSampAmp" class="power-stage">
+            <div><strong>PW_SAMPAMP</strong><span>bits 11:9 · 采样运放</span></div><output id="powerSampAmpValue">100%</output><code id="powerSampAmpCode">0b011</code>
+          </article>
+          <article id="powerStageComp" class="power-stage">
+            <div><strong>PW_COMP</strong><span>bits 14:12 · 比较器</span></div><output id="powerCompValue">100%</output><code id="powerCompCode">0b011</code>
+          </article>
+        </div>
+        <div class="power-write-options">
+          <label class="toggle compact-toggle"><span>读写前打开 ASC 外部电源</span><input id="powerControlPowerOn" type="checkbox" checked></label>
+          <label class="toggle compact-toggle"><span>确认写入 PW_CTRL 的五个功耗字段</span><input id="powerWriteConfirm" type="checkbox"></label>
+        </div>
+        <p id="powerDecodeWarning" class="power-decode-warning"></p>
+        <div id="powerSummary" class="power-summary idle">调整滑块后会实时计算 PW_CTRL；写入前需要勾选确认。</div>
+        <div class="table-wrap">
+          <table class="test-table">
+            <thead><tr><th>步骤</th><th>寄存器</th><th>地址</th><th>掩码</th><th>期望值</th><th>实际值</th><th>结果</th><th>说明</th></tr></thead>
+            <tbody id="powerResultRows"></tbody>
           </table>
         </div>
       </section>
@@ -240,8 +402,8 @@
         <div class="legend">
           <span><i class="line ch0"></i>CH0</span>
           <span><i class="line ch1"></i>CH1</span>
-          <span id="sampleCount">0 samples</span>
-          <span id="latestSample">latest --</span>
+          <span id="sampleCount">0 个采样</span>
+          <span id="latestSample">最新值：--</span>
         </div>
       </section>
 
@@ -256,10 +418,10 @@
           <span id="otaFileSize">--</span>
         </div>
         <progress id="otaProgress" value="0" max="100"></progress>
-        <div class="ota-progress-text" id="otaProgressText">idle</div>
+        <div class="ota-progress-text" id="otaProgressText">空闲</div>
         <div class="button-row">
           <button id="otaUploadBtn" class="primary">上传并测试</button>
-          <button id="resetBtn">Reset</button>
+          <button id="resetBtn">重启</button>
         </div>
       </section>
 
@@ -273,6 +435,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260629-header-ui"></script>
+  <script src="./app.js?v=20260721-ch1-vth-mv"></script>
 </body>
 </html>

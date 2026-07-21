@@ -1,6 +1,6 @@
 'use strict';
 
-const WEB_CONSOLE_BUILD = '20260629-header-ui';
+const WEB_CONSOLE_BUILD = '20260721-ch1-vth-mv';
 
 const UUIDS = {
   ascService: '41534300-7a6d-4ef9-9c6b-5c5940000001',
@@ -10,12 +10,14 @@ const UUIDS = {
   adcData: '41534304-7a6d-4ef9-9c6b-5c5940000001',
   regReq: '41534305-7a6d-4ef9-9c6b-5c5940000001',
   regRsp: '41534306-7a6d-4ef9-9c6b-5c5940000001',
+  sivyTestCtrl: '41534307-7a6d-4ef9-9c6b-5c5940000001',
+  sivyTestResult: '41534308-7a6d-4ef9-9c6b-5c5940000001',
   smpService: '8d53dc1d-1db7-4cd3-868b-8a527460aa84',
   smpChar: 'da2e7828-fbce-4e01-ae9e-261174997c48',
 };
 
-const DEFAULT_NAME_PREFIX = 'Sivy_ASC';
-const DEFAULT_DEVICE_NAME = 'Sivy_ASC_V0';
+const DEFAULT_NAME_PREFIX = 'Sivy_ASC_Test';
+const DEFAULT_DEVICE_NAME = 'Sivy_ASC_Test';
 const DEFAULT_FILTER_MODE = 'allDevices';
 
 const CTRL = {
@@ -43,13 +45,79 @@ const REG = {
 };
 
 const REG_STATUS_NAMES = [
-  'OK',
-  'INVALID_PARAM',
-  'INVALID_STATE',
-  'UNSUPPORTED',
-  'IO_ERROR',
-  'DENIED',
+  '正常',
+  '参数无效',
+  '状态无效',
+  '不支持',
+  'I2C 错误',
+  '拒绝执行',
 ];
+
+const SIVY_TEST = {
+  SNAPSHOT: 0x01,
+  SELECTED_INIT_WRITE: 0x02,
+  RESULT_REGISTER: 0x01,
+  RESULT_INIT_WRITE: 0x02,
+  RESULT_SUMMARY: 0x03,
+  PASS: 0x00,
+  MISMATCH: 0x01,
+  IO_ERROR: 0x02,
+};
+
+const SIVY_REGISTER_NAMES = new Map([
+  [0x00, 'GLB_CTRL0'], [0x02, 'GLB_CTRL1'], [0x04, 'PLL_CTRL'], [0x06, 'HSI_CTRL'],
+  [0x0a, 'QSPI_CTRL'], [0x0c, 'MULTI_CHIP_CTRL'], [0x0e, 'CH0_CTRL'], [0x10, 'CH0_FEAT'],
+  [0x12, 'CH0_AVG_WORKWIN'], [0x14, 'CH0_AVG_WAITWIN'], [0x16, 'CH1_CTRL'], [0x18, 'CH1_FEAT'],
+  [0x1a, 'CH1_AVG_WORKWIN'], [0x1c, 'CH1_AVG_WAITWIN'], [0x1e, 'CH2_CTRL'], [0x20, 'CH2_FEAT'],
+  [0x22, 'CH2_AVG_WORKWIN'], [0x24, 'CH2_AVG_WAITWIN'], [0x26, 'CH3_CTRL'], [0x28, 'CH3_FEAT'],
+  [0x2a, 'CH3_AVG_WORKWIN'], [0x2c, 'CH3_AVG_WAITWIN'], [0x2e, 'COMP0_TRIM'], [0x30, 'COMP1_TRIM'],
+  [0x32, 'COMP2_TRIM'], [0x34, 'COMP3_TRIM'], [0x36, 'SAMP_AMP_TRIM'], [0x38, 'PW_CTRL（CPW_CTRL）'],
+  [0x3a, 'CO_CTRL'],
+]);
+
+const SIVY_REGISTER_EXPECTED = new Map([
+  [0x00, 0x000c], [0x02, 0x0000], [0x04, 0x4021], [0x06, 0x1001],
+  [0x0a, 0x0000], [0x0c, 0x0000], [0x0e, 0x000d], [0x10, 0x0000],
+  [0x12, 0x0000], [0x14, 0x0000], [0x16, 0x000d], [0x18, 0x0000],
+  [0x1a, 0x0000], [0x1c, 0x0000], [0x1e, 0x000d], [0x20, 0x0000],
+  [0x22, 0x0000], [0x24, 0x0000], [0x26, 0x000d], [0x28, 0x0000],
+  [0x2a, 0x0000], [0x2c, 0x0000], [0x2e, 0x0077], [0x30, 0x0077],
+  [0x32, 0x0077], [0x34, 0x0077], [0x36, 0x8888], [0x38, 0x36db],
+  [0x3a, 0x0000],
+]);
+
+const CH1_REGISTERS = Object.freeze([
+  { key: 'ctrl', name: 'CH1_CTRL', addr: 0x16, mask: 0xff3d, formula: 'CH_EN[0] | PGA_GAIN[5:2] | VTH[15:8]' },
+  { key: 'feature', name: 'CH1_FEAT', addr: 0x18, mask: 0x000f, formula: 'FEAT_SEL[0] | AVG_TRG_EN[1] | AVG_TRG_HA[3:2]' },
+  { key: 'workWindow', name: 'CH1_AVG_WORKWIN', addr: 0x1a, mask: 0x0fff, formula: 'WORK_WINDOW[11:0]' },
+  { key: 'waitWindow', name: 'CH1_AVG_WAITWIN', addr: 0x1c, mask: 0x0fff, formula: 'WAIT_WINDOW[11:0]' },
+]);
+
+const CH1_VTH = Object.freeze({
+  minimumMillivolts: 8,
+  maximumMillivolts: 2048,
+  stepMillivolts: 8,
+});
+
+const POWER_CONTROL_REGISTER = Object.freeze({
+  name: 'PW_CTRL（CPW_CTRL）',
+  addr: 0x38,
+  mask: 0x7fff,
+  fields: Object.freeze([
+    { key: 'pwrCtl', name: 'PWR_CTL', label: '全局', shift: 0, element: 'PwrCtl' },
+    { key: 'ampIn', name: 'PW_AMPIN', label: '输入运放', shift: 3, element: 'AmpIn' },
+    { key: 'pga', name: 'PW_PGA', label: 'PGA', shift: 6, element: 'Pga' },
+    { key: 'sampAmp', name: 'PW_SAMPAMP', label: '采样运放', shift: 9, element: 'SampAmp' },
+    { key: 'comp', name: 'PW_COMP', label: '比较器', shift: 12, element: 'Comp' },
+  ]),
+});
+
+const POWER_LEVELS = Object.freeze([
+  { percent: 25, binary: '0b000' }, { percent: 50, binary: '0b001' },
+  { percent: 75, binary: '0b010' }, { percent: 100, binary: '0b011' },
+  { percent: 125, binary: '0b100' }, { percent: 150, binary: '0b101' },
+  { percent: 175, binary: '0b110' }, { percent: 200, binary: '0b111' },
+]);
 
 const ASC_REG_TEST_PRESETS = {
   basic: [0x00, 0x08, 0x10, 0x11, 0x12, 0x13, 0x20, 0x21],
@@ -66,17 +134,17 @@ const SMP = {
 };
 
 const SMP_RC_NAMES = {
-  1: 'UNKNOWN',
-  2: 'NO_MEMORY',
-  3: 'INVALID_ARGUMENT',
-  4: 'TIMEOUT',
-  5: 'NO_ENTRY',
-  6: 'BAD_STATE',
-  7: 'RESPONSE_TOO_LARGE',
-  8: 'NOT_SUPPORTED',
-  9: 'CORRUPT',
-  10: 'BUSY',
-  11: 'ACCESS_DENIED',
+  1: '未知错误',
+  2: '内存不足',
+  3: '参数无效',
+  4: '超时',
+  5: '不存在',
+  6: '状态错误',
+  7: '响应过大',
+  8: '不支持',
+  9: '数据损坏',
+  10: '忙',
+  11: '访问被拒绝',
 };
 
 const state = {
@@ -86,6 +154,8 @@ const state = {
   smp: null,
   ctrlSeq: 0,
   regSeq: 0,
+  sivyTestSeq: 0,
+  sivyTestActiveSeq: null,
   pendingReg: new Map(),
   config: {
     version: 1,
@@ -106,6 +176,11 @@ const state = {
   },
   samples: [],
   ascRegTestRows: [],
+  sivyTestRows: [],
+  ch1Rows: [],
+  powerRows: [],
+  powerReadback: null,
+  sivyTestReferenceOutOfSync: false,
   otaBytes: null,
   otaName: '',
   otaInfo: null,
@@ -126,7 +201,15 @@ function log(message) {
 function setConnected(connected) {
   $('connectionDot').classList.toggle('connected', connected);
   $('connectionText').textContent = connected ? '已连接' : '未连接';
-  const alwaysEnabled = new Set(['clearLogBtn', 'ascTestClearBtn', 'ascTestExportBtn']);
+  const alwaysEnabled = new Set([
+    'clearLogBtn',
+    'ascTestClearBtn',
+    'ascTestExportBtn',
+    'sivyTestClearBtn',
+    'sivyTestExportBtn',
+    'powerClearBtn',
+    'powerExportBtn',
+  ]);
   for (const button of document.querySelectorAll('button')) {
     if (button.id !== 'connectBtn') {
       button.disabled = !connected && !alwaysEnabled.has(button.id);
@@ -146,7 +229,7 @@ function setRuntimeItem(id, value, level = 'ok') {
 
 function runtimeOriginLabel() {
   if (location.protocol === 'file:') return '本地文件';
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '::1') return 'localhost';
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '::1') return '本地主机';
   if (location.protocol === 'https:') return 'HTTPS';
   if (location.protocol === 'http:') return 'HTTP';
   return location.protocol.replace(':', '') || '--';
@@ -180,22 +263,22 @@ function updateRuntimeEnvironment() {
   setRuntimeItem('runtimeBluetooth', hasBluetooth ? '可用' : '不可用', hasBluetooth ? 'ok' : 'error');
   setRuntimeItem(
     'runtimeAdapter',
-    platform.isIOS && !hasBluetooth ? 'iOS 不支持' : platform.isAndroid ? 'Android 本机 BLE' : '本机 BLE',
+    platform.isIOS && !hasBluetooth ? 'iOS 不支持' : platform.isAndroid ? 'Android 本机蓝牙' : '本机蓝牙',
     platform.isIOS && !hasBluetooth ? 'error' : 'ok',
   );
 
   if (localFile) {
-    log('Web Bluetooth disabled: serve this directory over HTTPS or http://localhost instead of opening index.html directly.');
+    log('网页蓝牙不可用：请通过 HTTPS 或 http://localhost 提供此目录，不要直接打开 index.html。');
   } else if (!secure) {
-    log('Web Bluetooth disabled: open this page over HTTPS or localhost.');
+    log('网页蓝牙不可用：请通过 HTTPS 或本地主机打开此页面。');
   } else if (platform.isIOS && !hasBluetooth) {
-    log('Web Bluetooth disabled: iPhone/iPad Safari and iOS Chrome do not expose Web Bluetooth. Use Android Chrome/Edge/Samsung Internet or desktop Chrome/Edge.');
+    log('网页蓝牙不可用：iPhone/iPad 的 Safari 和 iOS Chrome 不提供网页蓝牙。请使用 Android Chrome/Edge/Samsung Internet 或桌面版 Chrome/Edge。');
   } else if (!hasBluetooth) {
-    log('Web Bluetooth disabled: use Android Chrome/Edge/Samsung Internet or desktop Chrome/Edge with a local BLE adapter.');
+    log('网页蓝牙不可用：请使用带本机蓝牙适配器的 Android Chrome/Edge/Samsung Internet 或桌面版 Chrome/Edge。');
   } else if (platform.isMobile) {
-    log(`Mobile Web Bluetooth ready; nearby devices are scanned from this ${platform.isAndroid ? 'Android' : 'mobile'} device (${origin}).`);
+    log(`网页蓝牙已就绪：将通过此${platform.isAndroid ? ' Android' : '移动'}设备扫描附近设备（${origin}）。`);
   } else {
-    log(`Web Bluetooth ready on this browser; nearby devices are scanned from this computer (${origin}).`);
+    log(`网页蓝牙已就绪：将通过本机扫描附近设备（${origin}）。`);
   }
 }
 
@@ -218,10 +301,10 @@ function hex(value, width = 4) {
 
 function parseNumberStrict(value) {
   const text = String(value ?? '').trim();
-  if (!text) throw new Error('empty number');
+  if (!text) throw new Error('数值不能为空');
   if (/^0x[0-9a-f]+$/i.test(text)) return Number.parseInt(text, 16);
   if (/^[0-9]+$/.test(text)) return Number.parseInt(text, 10);
-  throw new Error(`invalid number ${text}`);
+  throw new Error(`数值格式无效：${text}`);
 }
 
 function parseRegisterList(text) {
@@ -233,7 +316,7 @@ function parseRegisterList(text) {
     const range = token.split('-');
     if (range.length === 1) {
       const reg = parseNumberStrict(range[0]);
-      if (reg > 0x7f) throw new Error(`register out of range ${hex(reg, 2)}`);
+      if (reg > 0x7f) throw new Error(`寄存器超出范围：${hex(reg, 2)}`);
       if (!seen.has(reg)) {
         seen.add(reg);
         regs.push(reg);
@@ -241,11 +324,11 @@ function parseRegisterList(text) {
       continue;
     }
 
-    if (range.length !== 2) throw new Error(`invalid range ${token}`);
+    if (range.length !== 2) throw new Error(`范围格式无效：${token}`);
     const start = parseNumberStrict(range[0]);
     const end = parseNumberStrict(range[1]);
     if (start > end || end > 0x7f || (end - start) > 31) {
-      throw new Error(`invalid range ${token}`);
+      throw new Error(`范围格式无效：${token}`);
     }
     for (let reg = start; reg <= end; reg += 1) {
       if (!seen.has(reg)) {
@@ -255,13 +338,13 @@ function parseRegisterList(text) {
     }
   }
 
-  if (regs.length === 0) throw new Error('register list is empty');
-  if (regs.length > 64) throw new Error('too many registers');
+  if (regs.length === 0) throw new Error('寄存器列表不能为空');
+  if (regs.length > 64) throw new Error('寄存器数量不能超过 64 个');
   return regs;
 }
 
 function regStatusName(status) {
-  return REG_STATUS_NAMES[status] || `STATUS_${status}`;
+  return REG_STATUS_NAMES[status] || `未知状态_${status}`;
 }
 
 function getDeviceFilterMode() {
@@ -303,9 +386,9 @@ function buildBluetoothRequestOptions() {
 
 function describeDeviceFilter() {
   const mode = getDeviceFilterMode();
-  if (mode === 'ascService') return `target services/name (${UUIDS.ascService}, SMP, ${getDeviceNamePrefix()})`;
-  if (mode === 'allDevices') return 'all nearby BLE devices';
-  return `name prefix "${getDeviceNamePrefix()}"`;
+  if (mode === 'ascService') return `目标服务/名称（${UUIDS.ascService}、SMP、${getDeviceNamePrefix()}）`;
+  if (mode === 'allDevices') return '附近的全部蓝牙设备';
+  return `名称前缀“${getDeviceNamePrefix()}”`;
 }
 
 function updateDeviceFilterUi() {
@@ -319,11 +402,11 @@ function webBluetoothHint(error) {
   const message = error?.message || String(error);
 
   if (!window.isSecureContext) {
-    return `${message}。Web Bluetooth 需要 http://localhost 或 HTTPS，请不要直接双击 index.html 打开。`;
+    return `${message}。网页蓝牙需要 http://localhost 或 HTTPS，请不要直接双击 index.html 打开。`;
   }
 
   if (name === 'NotFoundError') {
-    return `${message}。如果弹窗里没有 Sivy_ASC_V0，请确认板子正在 advertising、没有被手机/nRF Connect 占用连接，并保持“全部设备”模式重试。`;
+    return `${message}。如果弹窗里没有 Sivy_ASC_Test，请确认板子正在广播、没有被手机/nRF Connect 占用连接，并保持“全部设备”模式重试。`;
   }
 
   if (name === 'SecurityError') {
@@ -346,8 +429,8 @@ function ensureProfileEntries() {
     row.className = 'profile-entry';
     row.innerHTML = `
       <label class="toggle"><span>#${i + 1}</span><input id="profileEn${i}" type="checkbox"></label>
-      <label>Reg<input id="profileReg${i}" type="text" value="0x00"></label>
-      <label>Value<input id="profileVal${i}" type="text" value="0x0000"></label>
+      <label>寄存器<input id="profileReg${i}" type="text" value="0x00"></label>
+      <label>数值<input id="profileVal${i}" type="text" value="0x0000"></label>
     `;
     host.appendChild(row);
   }
@@ -525,8 +608,8 @@ function parseSample(value) {
 }
 
 function describeSample(sample) {
-  const mvText = (sample.flags & 0x01) ? `${sample.mv} mV` : 'raw-only';
-  return `seq=${sample.seq} ch=${sample.channel} raw=${sample.raw} ${mvText}`;
+  const mvText = (sample.flags & 0x01) ? `${sample.mv} mV` : '仅原始值';
+  return `序号=${sample.seq} 通道=${sample.channel} 原始值=${sample.raw} ${mvText}`;
 }
 
 function updateStatus(status) {
@@ -534,48 +617,48 @@ function updateStatus(status) {
   const connected = (status.flags & 0x02) !== 0;
   const advertising = (status.flags & 0x04) !== 0;
   const notify = (status.flags & 0x08) !== 0;
-  const ledNames = ['safe', 'power', 'dac-ok', 'dac-error'];
+  const ledNames = ['安全', '电源已打开', 'DAC 正常', 'DAC 错误'];
   const appStateNames = [
-    'boot-safe',
-    'advertising',
-    'connected-idle',
-    'armed',
-    'capturing',
-    'low-power',
-    'error',
+    '安全启动',
+    '正在广播',
+    '已连接空闲',
+    '已布防',
+    '正在采集',
+    '低功耗',
+    '错误',
   ];
 
-  $('powerValue').textContent = power ? 'ON' : 'OFF';
-  $('bleValue').textContent = connected ? 'connected' : (advertising ? 'advertising' : 'idle');
-  $('ledValue').textContent = ledNames[status.ledMode] || `mode ${status.ledMode}`;
-  $('notifyValue').textContent = notify ? 'ON' : 'OFF';
+  $('powerValue').textContent = power ? '已打开' : '已关闭';
+  $('bleValue').textContent = connected ? '已连接' : (advertising ? '正在广播' : '空闲');
+  $('ledValue').textContent = ledNames[status.ledMode] || `模式 ${status.ledMode}`;
+  $('notifyValue').textContent = notify ? '已启用' : '已关闭';
   $('adcOkValue').textContent = status.adcOk;
   $('adcErrValue').textContent = status.adcErr;
   $('dacOkValue').textContent = `${status.dacProbeOk}/${status.dacWriteOk}`;
   $('i2cErrValue').textContent = `${status.dacI2cErr}/${status.ascI2cErr}`;
   $('appStateValue').textContent = appStateNames[status.appState] || '--';
-  $('profileValue').textContent = `${(status.profileFlags & 0x01) ? 'on' : 'off'}/${(status.profileFlags & 0x02) ? 'verify' : 'no-verify'}`;
+  $('profileValue').textContent = `${(status.profileFlags & 0x01) ? '已启用' : '已关闭'}/${(status.profileFlags & 0x02) ? '校验' : '不校验'}`;
   $('queueValue').textContent = status.sampleQueue;
   $('bleDropValue').textContent = `${status.bleCongested}/${status.sampleDrop}`;
 }
 
 async function connect() {
   if (!state.bluetoothReady) {
-    throw new Error('Web Bluetooth requires HTTPS or localhost in desktop Chrome/Edge');
+    throw new Error('网页蓝牙需要使用桌面版 Chrome/Edge 的 HTTPS 或本地主机页面');
   }
 
   if (!window.isSecureContext) {
-    throw new Error('当前页面不是安全上下文：请通过 http://localhost:8080 打开 Web Console');
+    throw new Error('当前页面不是安全上下文：请通过 http://localhost:8080 打开测试控制台');
   }
 
   if (!navigator.bluetooth) {
-    throw new Error('当前浏览器不支持 Web Bluetooth，请使用 Android Chrome/Edge/Samsung Internet 或桌面版 Chrome/Edge');
+    throw new Error('当前浏览器不支持网页蓝牙，请使用 Android Chrome/Edge/Samsung Internet 或桌面版 Chrome/Edge');
   }
 
-  log(`Opening BLE chooser: ${describeDeviceFilter()}`);
+  log(`正在打开蓝牙设备选择器：${describeDeviceFilter()}`);
   log('如果目标设备不出现：先确认手机/nRF Connect 已断开，再保持“全部设备”模式重新点击连接。');
   const device = await navigator.bluetooth.requestDevice(buildBluetoothRequestOptions());
-  log(`Selected BLE device: ${device.name || '(unnamed)'} / ${device.id || 'no-id'}`);
+  log(`已选择蓝牙设备：${device.name || '未命名'} / ${device.id || '无标识'}`);
 
   device.addEventListener('gattserverdisconnected', onDisconnected);
   const server = await device.gatt.connect();
@@ -584,7 +667,7 @@ async function connect() {
     ascService = await server.getPrimaryService(UUIDS.ascService);
   } catch (error) {
     device.gatt.disconnect();
-    throw new Error('所选设备没有 ASC GATT service，请重新选择正确设备');
+    throw new Error('所选设备没有 ASC GATT 服务，请重新选择正确设备');
   }
 
   state.device = device;
@@ -594,6 +677,8 @@ async function connect() {
   state.chars.ctrl = await ascService.getCharacteristic(UUIDS.ctrl);
   state.chars.regReq = await ascService.getCharacteristic(UUIDS.regReq);
   state.chars.regRsp = await ascService.getCharacteristic(UUIDS.regRsp);
+  state.chars.sivyTestCtrl = await ascService.getCharacteristic(UUIDS.sivyTestCtrl);
+  state.chars.sivyTestResult = await ascService.getCharacteristic(UUIDS.sivyTestResult);
   state.chars.adcData = await ascService.getCharacteristic(UUIDS.adcData);
 
   await state.chars.status.startNotifications();
@@ -606,7 +691,7 @@ async function connect() {
     const sample = parseSample(event.target.value);
     state.samples.push(sample);
     if (state.samples.length > 480) state.samples.shift();
-    $('sampleCount').textContent = `${state.samples.length} samples`;
+    $('sampleCount').textContent = `${state.samples.length} 个采样`;
     $('latestSample').textContent = describeSample(sample);
     drawSamples();
   });
@@ -616,19 +701,24 @@ async function connect() {
     onRegRsp(parseRegRsp(event.target.value));
   });
 
+  await state.chars.sivyTestResult.startNotifications();
+  state.chars.sivyTestResult.addEventListener('characteristicvaluechanged', (event) => {
+    onSivyTestResult(parseSivyTestResult(event.target.value));
+  });
+
   try {
     const smpService = await server.getPrimaryService(UUIDS.smpService);
     const smpChar = await smpService.getCharacteristic(UUIDS.smpChar);
     state.smp = new SmpClient(smpChar);
     await state.smp.init();
-    log('SMP OTA service ready');
+    log('SMP OTA 服务已就绪');
   } catch (error) {
     state.smp = null;
-    log(`SMP OTA unavailable: ${error.message}`);
+    log(`SMP OTA 不可用：${error.message}`);
   }
 
   setConnected(true);
-  log(`Connected to ${device.name || device.id || 'unnamed BLE device'}`);
+  log(`已连接到 ${device.name || device.id || '未命名蓝牙设备'}`);
   await readConfig();
   await readStatus();
 }
@@ -638,11 +728,12 @@ function onDisconnected() {
   state.server = null;
   state.chars = {};
   state.smp = null;
+  state.sivyTestActiveSeq = null;
   for (const pending of state.pendingReg.values()) {
-    pending.reject(new Error('Device disconnected'));
+    pending.reject(new Error('设备已断开连接'));
   }
   state.pendingReg.clear();
-  log('Device disconnected');
+  log('设备已断开连接');
 }
 
 async function disconnect() {
@@ -654,20 +745,20 @@ async function disconnect() {
 async function readStatus() {
   const value = await state.chars.status.readValue();
   updateStatus(parseStatus(value));
-  log('STATUS read');
+  log('已读取状态');
 }
 
 async function readConfig() {
   const value = await state.chars.config.readValue();
   state.config = parseConfig(value);
   applyConfigToForm(state.config);
-  log('CONFIG read');
+  log('已读取配置');
 }
 
 async function writeConfig() {
   const config = configFromForm();
   await state.chars.config.writeValueWithResponse(packConfig(config));
-  log(`CONFIG write DAC=${config.dac.join('/')}`);
+  log(`已写入配置，DAC=${config.dac.join('/')}`);
 }
 
 function packCtrl(opcode, arg0 = 0, arg1 = 0) {
@@ -701,8 +792,8 @@ function parseRegRsp(value) {
 
 function formatRegRsp(rsp) {
   const full32 = ((rsp.mask << 16) | rsp.value) >>> 0;
-  return `seq=${rsp.seq} target=${hex(rsp.target, 2)} op=${hex(rsp.op, 2)} status=${regStatusName(rsp.status)} ` +
-    `addr=${hex(rsp.addr, 4)} value=${hex(rsp.value, 4)} mask=${hex(rsp.mask, 4)} u32=${hex(full32, 8)}`;
+  return `序号=${rsp.seq} 目标=${hex(rsp.target, 2)} 操作=${hex(rsp.op, 2)} 状态=${regStatusName(rsp.status)} ` +
+    `地址=${hex(rsp.addr, 4)} 数值=${hex(rsp.value, 4)} 掩码=${hex(rsp.mask, 4)} 32位=${hex(full32, 8)}`;
 }
 
 function onRegRsp(rsp) {
@@ -714,6 +805,224 @@ function onRegRsp(rsp) {
   }
 
   $('regResult').textContent = formatRegRsp(rsp);
+}
+
+function parseSivyTestResult(value) {
+  const view = value instanceof DataView ? value : new DataView(value.buffer || value);
+  return {
+    seq: view.getUint8(0),
+    type: view.getUint8(1),
+    status: view.getUint8(2),
+    index: view.getUint8(3),
+    reg: view.getUint8(4),
+    expected: view.getUint16(6, true),
+    actual: view.getUint16(8, true),
+    matchCount: view.getUint16(10, true),
+    mismatchCount: view.getUint16(12, true),
+    ioErrorCount: view.getUint16(14, true),
+  };
+}
+
+function sivyTestStatusName(status) {
+  if (status === SIVY_TEST.PASS) return '通过';
+  if (status === SIVY_TEST.MISMATCH) return '数值不匹配';
+  if (status === SIVY_TEST.IO_ERROR) return 'I2C 错误';
+  return `未知状态（${hex(status, 2)}）`;
+}
+
+function setSivyTestSummary(text, level = 'idle') {
+  const summary = $('sivyTestSummary');
+  summary.textContent = text;
+  summary.classList.remove('pass', 'fail', 'running', 'idle');
+  summary.classList.add(level);
+}
+
+function clearSivyTestResults() {
+  state.sivyTestRows = [];
+  state.sivyTestReferenceOutOfSync = false;
+  $('sivyTestRows').textContent = '';
+  setSivyTestSummary('等待固件测试结果', 'idle');
+}
+
+function evaluateSivyTestResult(result) {
+  const expected = SIVY_REGISTER_EXPECTED.get(result.reg) ?? result.expected;
+  const firmwareReferenceMatches = result.expected === expected;
+  const actualAvailable = result.status !== SIVY_TEST.IO_ERROR;
+  const valueMatches = actualAvailable && result.actual === expected;
+
+  if (!firmwareReferenceMatches) {
+    return {
+      expected,
+      pass: false,
+      status: `固件期望值不一致（设备：${hex(result.expected, 4)}）`,
+      firmwareReferenceMatches,
+    };
+  }
+
+  if (result.status === SIVY_TEST.IO_ERROR) {
+    return {
+      expected,
+      pass: false,
+      status: 'I2C 错误',
+      firmwareReferenceMatches,
+    };
+  }
+
+  return {
+    expected,
+    pass: valueMatches,
+    status: valueMatches ? '通过' : '数值不匹配',
+    firmwareReferenceMatches,
+  };
+}
+
+function appendSivyTestResult(result) {
+  const tbody = $('sivyTestRows');
+  const tr = document.createElement('tr');
+  const evaluation = evaluateSivyTestResult(result);
+  const isInitWrite = result.type === SIVY_TEST.RESULT_INIT_WRITE;
+
+  if (!evaluation.firmwareReferenceMatches) {
+    if (!state.sivyTestReferenceOutOfSync) {
+      log(`Sivy 固件参考值与 Excel 不一致：${hex(result.reg, 2)} 设备=${hex(result.expected, 4)}，网页=${hex(evaluation.expected, 4)}`);
+    }
+    state.sivyTestReferenceOutOfSync = true;
+  }
+
+  const cells = [
+    isInitWrite ? '初始化写入' : String(result.index),
+    SIVY_REGISTER_NAMES.get(result.reg) || '--',
+    hex(result.reg, 2),
+    hex(evaluation.expected, 4),
+    result.status === SIVY_TEST.IO_ERROR ? '--' : hex(result.actual, 4),
+    evaluation.status,
+    `${result.matchCount}/${result.mismatchCount}/${result.ioErrorCount}`,
+  ];
+
+  for (const value of cells) {
+    const td = document.createElement('td');
+    td.textContent = value;
+    tr.appendChild(td);
+  }
+  tr.children[5].className = evaluation.pass ? 'pass' : 'fail';
+  tbody.appendChild(tr);
+  state.sivyTestRows.push({
+    time: new Date().toISOString(),
+    index: isInitWrite ? '初始化写入' : result.index,
+    name: SIVY_REGISTER_NAMES.get(result.reg) || '--',
+    reg: hex(result.reg, 2),
+    expected: hex(evaluation.expected, 4),
+    firmwareExpected: hex(result.expected, 4),
+    actual: result.status === SIVY_TEST.IO_ERROR ? '--' : hex(result.actual, 4),
+    status: evaluation.status,
+    matchCount: result.matchCount,
+    mismatchCount: result.mismatchCount,
+    ioErrorCount: result.ioErrorCount,
+  });
+}
+
+function onSivyTestResult(result) {
+  if (state.sivyTestActiveSeq !== null && result.seq !== state.sivyTestActiveSeq) {
+    log(`已忽略过期的 Sivy 测试结果，序号=${result.seq}`);
+    return;
+  }
+
+  if (result.type === SIVY_TEST.RESULT_SUMMARY) {
+    const firmwarePassed = result.status === SIVY_TEST.PASS;
+    const passed = firmwarePassed && !state.sivyTestReferenceOutOfSync;
+    const status = state.sivyTestReferenceOutOfSync ? '固件参考值不一致' : sivyTestStatusName(result.status);
+    const referenceNotice = state.sivyTestReferenceOutOfSync ? '；请升级为当前测试固件' : '';
+    setSivyTestSummary(
+      `${status}：匹配 ${result.matchCount} 项，不匹配 ${result.mismatchCount} 项，I2C 错误 ${result.ioErrorCount} 项${referenceNotice}`,
+      passed ? 'pass' : 'fail',
+    );
+    state.sivyTestActiveSeq = null;
+    log(`Sivy I2C 测试完成：${status}，匹配=${result.matchCount}，不匹配=${result.mismatchCount}，I2C 错误=${result.ioErrorCount}`);
+    void readStatus().catch((error) => log(`Sivy 测试后刷新状态失败：${error.message}`));
+    return;
+  }
+
+  if (result.type !== SIVY_TEST.RESULT_REGISTER && result.type !== SIVY_TEST.RESULT_INIT_WRITE) {
+    log(`已忽略不支持的 Sivy 测试事件类型 ${hex(result.type, 2)}`);
+    return;
+  }
+
+  appendSivyTestResult(result);
+}
+
+function packSivyTestCmd(seq, opcode) {
+  const buffer = new ArrayBuffer(2);
+  const view = new DataView(buffer);
+  view.setUint8(0, seq);
+  view.setUint8(1, opcode);
+  return buffer;
+}
+
+async function startSivyTest(opcode) {
+  if (state.sivyTestActiveSeq !== null) {
+    throw new Error('Sivy I2C 测试正在执行');
+  }
+
+  const seq = state.sivyTestSeq++ & 0xff;
+  clearSivyTestResults();
+  state.sivyTestActiveSeq = seq;
+  setSivyTestSummary('固件正在执行测试并回传结果…', 'running');
+
+  try {
+    await state.chars.sivyTestCtrl.writeValueWithResponse(packSivyTestCmd(seq, opcode));
+  } catch (error) {
+    state.sivyTestActiveSeq = null;
+    setSivyTestSummary(`启动失败：${error.message}`, 'fail');
+    throw error;
+  }
+
+  log(`Sivy I2C 测试已开始：序号=${seq}，操作码=${hex(opcode, 2)}`);
+}
+
+async function runSivySnapshot() {
+  await startSivyTest(SIVY_TEST.SNAPSHOT);
+}
+
+async function runSivySelectedInitWrite() {
+  if (!$('sivyTestInitConfirm').checked) {
+    throw new Error('请先确认允许写入 PW_CTRL（CPW_CTRL）[0x38] = 0x36DB');
+  }
+  await startSivyTest(SIVY_TEST.SELECTED_INIT_WRITE);
+}
+
+function exportSivyTestCsv() {
+  if (state.sivyTestRows.length === 0) {
+    log('Sivy I2C 测试 CSV 未导出：没有结果行');
+    return;
+  }
+
+  const columns = [
+    ['time', '时间'],
+    ['index', '序号'],
+    ['name', '名称'],
+    ['reg', '寄存器'],
+    ['expected', '期望值'],
+    ['firmwareExpected', '固件期望值'],
+    ['actual', '实际值'],
+    ['status', '状态'],
+    ['matchCount', '匹配数'],
+    ['mismatchCount', '不匹配数'],
+    ['ioErrorCount', 'I2C 错误数'],
+  ];
+  const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  const csv = [
+    columns.map(([, label]) => label).join(','),
+    ...state.sivyTestRows.map((row) => columns.map(([key]) => escape(row[key])).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  link.href = url;
+  link.download = `sivy_i2c_test_${stamp}.csv`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log(`Sivy I2C 测试 CSV 已导出：${state.sivyTestRows.length} 行`);
 }
 
 function packRegReqPacket(req, seq) {
@@ -746,7 +1055,7 @@ async function sendRegReq(req, timeoutMs = 3000) {
   const response = new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       state.pendingReg.delete(seq);
-      reject(new Error('REG_RSP timeout'));
+      reject(new Error('等待 REG_RSP 响应超时'));
     }, timeoutMs);
     state.pendingReg.set(seq, { resolve, reject, timer });
   });
@@ -767,10 +1076,499 @@ async function sendRegReq(req, timeoutMs = 3000) {
 async function regCommand(op) {
   const rsp = await sendRegReq(packRegReq(op));
   if (rsp.status !== REG.OK) {
-    throw new Error(`REG ${regStatusName(rsp.status)}`);
+    throw new Error(`寄存器操作失败：${regStatusName(rsp.status)}`);
   }
   await readStatus();
   return rsp;
+}
+
+function ch1ConfigNumber(id, maximum) {
+  const value = parseNumber($(id).value);
+  if (!Number.isInteger(value) || value < 0 || value > maximum) {
+    throw new Error(`${id} 必须是 0 到 ${maximum} 的整数`);
+  }
+  return value;
+}
+
+function ch1VthCodeFromMillivolts() {
+  const millivolts = parseNumber($('ch1VthMv').value);
+  const { minimumMillivolts, maximumMillivolts, stepMillivolts } = CH1_VTH;
+  if (!Number.isInteger(millivolts)
+      || millivolts < minimumMillivolts
+      || millivolts > maximumMillivolts
+      || millivolts % stepMillivolts !== 0) {
+    throw new Error(`ch1VthMv 必须是 ${minimumMillivolts} 到 ${maximumMillivolts} mV 之间、步进 ${stepMillivolts} mV 的整数`);
+  }
+  return (millivolts / stepMillivolts) - 1;
+}
+
+function ch1VthMillivoltsFromCode(code) {
+  return (code + 1) * CH1_VTH.stepMillivolts;
+}
+
+function getCh1RegisterPlan() {
+  const channelEnabled = $('ch1Enable').checked ? 1 : 0;
+  const pgaGain = ch1ConfigNumber('ch1PgaGain', 15);
+  const thresholdMillivolts = ch1ConfigNumber('ch1VthMv', CH1_VTH.maximumMillivolts);
+  const threshold = ch1VthCodeFromMillivolts();
+  const featureSelect = ch1ConfigNumber('ch1FeatSel', 1);
+  const averageTriggerEnabled = $('ch1AvgTriggerEnable').checked ? 1 : 0;
+  const averageTriggerEdge = ch1ConfigNumber('ch1AvgTriggerEdge', 2);
+  const workWindow = ch1ConfigNumber('ch1WorkWindow', 0x0fff);
+  const waitWindow = ch1ConfigNumber('ch1WaitWindow', 0x0fff);
+
+  return [
+    {
+      ...CH1_REGISTERS[0],
+      value: channelEnabled | (pgaGain << 2) | (threshold << 8),
+      detail: `CH_EN=${channelEnabled}, PGA_GAIN=${hex(pgaGain, 1)}, VTH=${thresholdMillivolts} mV (${hex(threshold, 2)})`,
+    },
+    {
+      ...CH1_REGISTERS[1],
+      value: featureSelect | (averageTriggerEnabled << 1) | (averageTriggerEdge << 2),
+      detail: `FEAT_SEL=${featureSelect}, AVG_TRG_EN=${averageTriggerEnabled}, AVG_TRG_HA=${averageTriggerEdge}`,
+    },
+    {
+      ...CH1_REGISTERS[2],
+      value: workWindow,
+      detail: `WORK_WINDOW=${workWindow}`,
+    },
+    {
+      ...CH1_REGISTERS[3],
+      value: waitWindow,
+      detail: `WAIT_WINDOW=${waitWindow}`,
+    },
+  ];
+}
+
+function setCh1Summary(text, level = 'idle') {
+  const summary = $('ch1Summary');
+  summary.textContent = text;
+  summary.classList.remove('pass', 'fail', 'running', 'idle');
+  summary.classList.add(level);
+}
+
+function renderCh1RegisterPlan() {
+  const tbody = $('ch1PreviewRows');
+  const warning = $('ch1DecodeWarning');
+  tbody.textContent = '';
+  warning.textContent = '';
+
+  try {
+    for (const entry of getCh1RegisterPlan()) {
+      const row = document.createElement('tr');
+      const cells = [entry.name, hex(entry.addr, 2), hex(entry.mask, 4), hex(entry.value, 4), entry.detail];
+      for (const value of cells) {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.appendChild(cell);
+      }
+      tbody.appendChild(row);
+    }
+  } catch (error) {
+    warning.textContent = `寄存器计算失败：${error.message}`;
+  }
+}
+
+function clearCh1Results() {
+  state.ch1Rows = [];
+  $('ch1ResultRows').textContent = '';
+  setCh1Summary('调整控件后会实时显示计算寄存器值；写入前需要勾选确认。');
+}
+
+function appendCh1Result(row) {
+  const tbody = $('ch1ResultRows');
+  const tr = document.createElement('tr');
+  const cells = [row.step, row.name, row.addr, row.mask, row.expected, row.actual, row.status, row.note];
+
+  for (const value of cells) {
+    const cell = document.createElement('td');
+    cell.textContent = value;
+    tr.appendChild(cell);
+  }
+  tr.children[6].className = row.pass ? 'pass' : 'fail';
+  tbody.appendChild(tr);
+  state.ch1Rows.push({ time: new Date().toISOString(), ...row });
+}
+
+async function maybePowerOnForCh1() {
+  if ($('ch1PowerOn').checked) {
+    await ctrl(CTRL.POWER_ON);
+  }
+}
+
+function applyCh1Readback(readbacks) {
+  const ctrlValue = readbacks.get(0x16);
+  const featureValue = readbacks.get(0x18);
+  const workWindow = readbacks.get(0x1a);
+  const waitWindow = readbacks.get(0x1c);
+  const triggerEdge = (featureValue >> 2) & 0x03;
+
+  $('ch1Enable').checked = (ctrlValue & 0x0001) !== 0;
+  $('ch1PgaGain').value = String((ctrlValue >> 2) & 0x0f);
+  $('ch1VthMv').value = String(ch1VthMillivoltsFromCode((ctrlValue >> 8) & 0xff));
+  $('ch1FeatSel').value = String(featureValue & 0x01);
+  $('ch1AvgTriggerEnable').checked = (featureValue & 0x02) !== 0;
+  $('ch1WorkWindow').value = String(workWindow & 0x0fff);
+  $('ch1WaitWindow').value = String(waitWindow & 0x0fff);
+
+  if (triggerEdge <= 2) {
+    $('ch1AvgTriggerEdge').value = String(triggerEdge);
+    $('ch1DecodeWarning').textContent = '';
+  } else {
+    $('ch1AvgTriggerEdge').value = '0';
+    $('ch1DecodeWarning').textContent = 'CH1_FEAT[3:2] 读回保留值 0b11；控件保留为上升沿，写入前请确认芯片状态。';
+  }
+  renderCh1RegisterPlan();
+}
+
+async function readCh1Registers({ clear = true, expectedPlan = null, skipPowerOn = false } = {}) {
+  if (clear) clearCh1Results();
+  if (!skipPowerOn) await maybePowerOnForCh1();
+
+  setCh1Summary('正在读取 CH1 寄存器并反解位域…', 'running');
+  const expectedByAddress = new Map((expectedPlan || []).map((entry) => [entry.addr, entry]));
+  const readbacks = new Map();
+  let ioErrors = 0;
+  let mismatches = 0;
+
+  for (const entry of CH1_REGISTERS) {
+    const response = await sendRegReq({
+      target: 1,
+      op: REG.READ,
+      width: 2,
+      addr: entry.addr,
+      value: 0,
+      mask: 0xffff,
+    });
+    const expected = expectedByAddress.get(entry.addr);
+
+    if (response.status !== REG.OK) {
+      ioErrors += 1;
+      appendCh1Result({
+        step: '读取',
+        name: entry.name,
+        addr: hex(entry.addr, 2),
+        mask: hex(entry.mask, 4),
+        expected: expected ? hex(expected.value, 4) : '--',
+        actual: '--',
+        status: regStatusName(response.status),
+        note: 'REG_REQ 读取失败',
+        pass: false,
+      });
+      continue;
+    }
+
+    readbacks.set(entry.addr, response.value);
+    const matches = !expected || ((response.value & entry.mask) === (expected.value & entry.mask));
+    if (!matches) mismatches += 1;
+    appendCh1Result({
+      step: '读取',
+      name: entry.name,
+      addr: hex(entry.addr, 2),
+      mask: hex(entry.mask, 4),
+      expected: expected ? hex(expected.value, 4) : '--',
+      actual: hex(response.value, 4),
+      status: matches ? '通过' : '位域不匹配',
+      note: expected ? (matches ? '可写位与计算值一致' : '保留位未参与比较') : '已读取并等待反解',
+      pass: matches,
+    });
+  }
+
+  if (readbacks.size === CH1_REGISTERS.length) applyCh1Readback(readbacks);
+
+  if (ioErrors > 0) {
+    setCh1Summary(`读取完成：${ioErrors} 个 I2C/REG 错误。`, 'fail');
+  } else if (mismatches > 0) {
+    setCh1Summary(`读取完成：${mismatches} 个寄存器的可写位与计算值不匹配。`, 'fail');
+  } else if (expectedPlan) {
+    setCh1Summary('写入后的四个 CH1 寄存器均已回读校验通过。', 'pass');
+  } else {
+    setCh1Summary('已读取四个 CH1 寄存器，并已反解到配置控件。', 'pass');
+  }
+  return { readbacks, ioErrors, mismatches };
+}
+
+async function writeCh1Registers() {
+  if (!$('ch1WriteConfirm').checked) {
+    throw new Error('请先确认允许写入 CH1 的可写位');
+  }
+
+  const plan = getCh1RegisterPlan();
+  clearCh1Results();
+  await maybePowerOnForCh1();
+  setCh1Summary('正在按位域掩码写入 CH1 寄存器…', 'running');
+
+  for (const entry of plan) {
+    const response = await sendRegReq({
+      target: 1,
+      op: REG.UPDATE_BITS,
+      width: 2,
+      addr: entry.addr,
+      value: entry.value,
+      mask: entry.mask,
+    });
+    const accepted = response.status === REG.OK;
+    appendCh1Result({
+      step: '掩码写入',
+      name: entry.name,
+      addr: hex(entry.addr, 2),
+      mask: hex(entry.mask, 4),
+      expected: hex(entry.value, 4),
+      actual: accepted ? hex(response.value, 4) : '--',
+      status: accepted ? '已接受' : regStatusName(response.status),
+      note: accepted ? entry.detail : 'REG_REQ 更新失败',
+      pass: accepted,
+    });
+    if (!accepted) {
+      setCh1Summary(`${entry.name} 写入失败，未继续后续寄存器。`, 'fail');
+      return;
+    }
+  }
+
+  await readCh1Registers({ clear: false, expectedPlan: plan, skipPowerOn: true });
+}
+
+function exportCh1Results() {
+  if (state.ch1Rows.length === 0) {
+    log('CH1 CSV 未导出：没有读写结果');
+    return;
+  }
+  const columns = [
+    ['time', '时间'], ['step', '步骤'], ['name', '寄存器'], ['addr', '地址'],
+    ['mask', '掩码'], ['expected', '期望值'], ['actual', '实际值'], ['status', '结果'], ['note', '说明'],
+  ];
+  const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  const csv = [
+    columns.map(([, label]) => label).join(','),
+    ...state.ch1Rows.map((row) => columns.map(([key]) => escape(row[key])).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `sivy_ch1_register_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log(`CH1 读写 CSV 已导出：${state.ch1Rows.length} 行`);
+}
+
+function powerLevelCode() {
+  const level = parseNumber($('powerLevel').value);
+  if (!Number.isInteger(level) || level < 0 || level >= POWER_LEVELS.length) {
+    throw new Error('功耗挡位必须是 0 到 7 的整数');
+  }
+  return level;
+}
+
+function powerLevelText(level) {
+  const detail = POWER_LEVELS[level];
+  return `${detail.percent}%（档位 ${level} / ${detail.binary}）`;
+}
+
+function powerRegisterValue(level) {
+  return POWER_CONTROL_REGISTER.fields.reduce((value, field) => value | (level << field.shift), 0);
+}
+
+function getPowerControlPlan() {
+  const level = powerLevelCode();
+  return {
+    ...POWER_CONTROL_REGISTER,
+    level,
+    value: powerRegisterValue(level),
+    detail: `五路联动：${POWER_CONTROL_REGISTER.fields.map((field) => `${field.name}=${POWER_LEVELS[level].binary}`).join('，')}；${POWER_LEVELS[level].percent}%`,
+  };
+}
+
+function decodePowerControlValue(value) {
+  return POWER_CONTROL_REGISTER.fields.map((field) => ({
+    ...field,
+    level: (value >> field.shift) & 0x07,
+  }));
+}
+
+function setPowerSummary(text, level = 'idle') {
+  const summary = $('powerSummary');
+  summary.textContent = text;
+  summary.classList.remove('pass', 'fail', 'running', 'idle');
+  summary.classList.add(level);
+}
+
+function renderPowerControl() {
+  try {
+    const plan = getPowerControlPlan();
+    const fields = state.powerReadback || POWER_CONTROL_REGISTER.fields.map((field) => ({
+      ...field,
+      level: plan.level,
+    }));
+
+    $('powerLevelLabel').textContent = powerLevelText(plan.level);
+    $('powerRegisterPreview').textContent = `目标 PW_CTRL[0x38] = ${hex(plan.value, 4)}；UPDATE_BITS mask = ${hex(plan.mask, 4)}；bit 15 保留。`;
+
+    for (const field of fields) {
+      const detail = POWER_LEVELS[field.level];
+      $(`power${field.element}Value`).textContent = `${detail.percent}%`;
+      $(`power${field.element}Code`).textContent = detail.binary;
+      const stage = $(`powerStage${field.element}`);
+      stage.style.setProperty('--power-level', `${((field.level + 1) / POWER_LEVELS.length) * 100}%`);
+      stage.dataset.level = String(field.level);
+    }
+  } catch (error) {
+    $('powerDecodeWarning').textContent = `功耗寄存器计算失败：${error.message}`;
+  }
+}
+
+function applyPowerReadback(value) {
+  const fields = decodePowerControlValue(value);
+  const uniform = fields.every((field) => field.level === fields[0].level);
+  $('powerLevel').value = String(fields[0].level);
+  state.powerReadback = fields;
+  $('powerDecodeWarning').textContent = uniform
+    ? ''
+    : `读取到五个功耗字段并非同一挡位；滑块已定位到 PWR_CTL=${powerLevelText(fields[0].level)}。移动滑块并写入会将五路同步为所选挡位。`;
+  renderPowerControl();
+}
+
+function clearPowerResults() {
+  state.powerRows = [];
+  $('powerResultRows').textContent = '';
+  setPowerSummary('调整滑块后会实时计算 PW_CTRL；写入前需要勾选确认。');
+}
+
+function appendPowerResult(row) {
+  const tbody = $('powerResultRows');
+  const tr = document.createElement('tr');
+  const cells = [row.step, row.name, row.addr, row.mask, row.expected, row.actual, row.status, row.note];
+
+  for (const value of cells) {
+    const cell = document.createElement('td');
+    cell.textContent = value;
+    tr.appendChild(cell);
+  }
+  tr.children[6].className = row.pass ? 'pass' : 'fail';
+  tbody.appendChild(tr);
+  state.powerRows.push({ time: new Date().toISOString(), ...row });
+}
+
+async function maybePowerOnForPowerControl() {
+  if ($('powerControlPowerOn').checked) {
+    await ctrl(CTRL.POWER_ON);
+  }
+}
+
+async function readPowerControl({ clear = true, expectedPlan = null, skipPowerOn = false } = {}) {
+  if (clear) clearPowerResults();
+  if (!skipPowerOn) await maybePowerOnForPowerControl();
+
+  setPowerSummary('正在读取 PW_CTRL 并反解五个功耗字段…', 'running');
+  const response = await sendRegReq({
+    target: 1,
+    op: REG.READ,
+    width: 2,
+    addr: POWER_CONTROL_REGISTER.addr,
+    value: 0,
+    mask: 0xffff,
+  });
+
+  if (response.status !== REG.OK) {
+    appendPowerResult({
+      step: '读取',
+      name: POWER_CONTROL_REGISTER.name,
+      addr: hex(POWER_CONTROL_REGISTER.addr, 2),
+      mask: hex(POWER_CONTROL_REGISTER.mask, 4),
+      expected: expectedPlan ? hex(expectedPlan.value, 4) : '--',
+      actual: '--',
+      status: regStatusName(response.status),
+      note: 'REG_REQ 读取失败',
+      pass: false,
+    });
+    setPowerSummary('读取 PW_CTRL 失败，请检查 ASC 外部电源、I2C 和 BLE 连接。', 'fail');
+    return { response, matched: false };
+  }
+
+  applyPowerReadback(response.value);
+  const matched = !expectedPlan
+    || ((response.value & POWER_CONTROL_REGISTER.mask) === (expectedPlan.value & POWER_CONTROL_REGISTER.mask));
+  appendPowerResult({
+    step: '读取',
+    name: POWER_CONTROL_REGISTER.name,
+    addr: hex(POWER_CONTROL_REGISTER.addr, 2),
+    mask: hex(POWER_CONTROL_REGISTER.mask, 4),
+    expected: expectedPlan ? hex(expectedPlan.value, 4) : '--',
+    actual: hex(response.value, 4),
+    status: matched ? '通过' : '功耗字段不匹配',
+    note: expectedPlan ? (matched ? '五个功耗字段已回读校验' : 'bit 15 保留，未参与比较') : '已反解到滑块和五路可视化',
+    pass: matched,
+  });
+  setPowerSummary(
+    expectedPlan
+      ? (matched ? 'PW_CTRL 的五个功耗字段已写入并回读校验通过。' : 'PW_CTRL 回读值与所选功耗挡位不一致。')
+      : '已读取 PW_CTRL，并已反解到滑块和五路功耗可视化。',
+    matched ? 'pass' : 'fail',
+  );
+  return { response, matched };
+}
+
+async function writePowerControl() {
+  if (!$('powerWriteConfirm').checked) {
+    throw new Error('请先确认允许写入 PW_CTRL 的五个功耗字段');
+  }
+
+  const plan = getPowerControlPlan();
+  clearPowerResults();
+  await maybePowerOnForPowerControl();
+  setPowerSummary(`正在将五个功耗字段同步写入 ${powerLevelText(plan.level)}…`, 'running');
+  const response = await sendRegReq({
+    target: 1,
+    op: REG.UPDATE_BITS,
+    width: 2,
+    addr: plan.addr,
+    value: plan.value,
+    mask: plan.mask,
+  });
+
+  const accepted = response.status === REG.OK;
+  appendPowerResult({
+    step: '掩码写入',
+    name: plan.name,
+    addr: hex(plan.addr, 2),
+    mask: hex(plan.mask, 4),
+    expected: hex(plan.value, 4),
+    actual: accepted ? hex(response.value, 4) : '--',
+    status: accepted ? '已接受' : regStatusName(response.status),
+    note: accepted ? plan.detail : 'REG_REQ 更新失败',
+    pass: accepted,
+  });
+  if (!accepted) {
+    setPowerSummary('PW_CTRL 写入失败。', 'fail');
+    return;
+  }
+
+  await readPowerControl({ clear: false, expectedPlan: plan, skipPowerOn: true });
+}
+
+function exportPowerResults() {
+  if (state.powerRows.length === 0) {
+    log('功耗控制 CSV 未导出：没有读写结果');
+    return;
+  }
+  const columns = [
+    ['time', '时间'], ['step', '步骤'], ['name', '寄存器'], ['addr', '地址'],
+    ['mask', '掩码'], ['expected', '期望值'], ['actual', '实际值'], ['status', '结果'], ['note', '说明'],
+  ];
+  const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+  const csv = [
+    columns.map(([, label]) => label).join(','),
+    ...state.powerRows.map((row) => columns.map(([key]) => escape(row[key])).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `sivy_power_control_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log(`功耗控制 CSV 已导出：${state.powerRows.length} 行`);
 }
 
 function setAscPreset(preset) {
@@ -846,7 +1644,7 @@ async function runAscRegisterReadSuite({ clear = true } = {}) {
   await maybePowerOnForAscTest();
 
   const regs = parseRegisterList($('ascTestReadList').value);
-  log(`ASC register read test: ${regs.length} register(s)`);
+  log(`ASC 寄存器读取测试：${regs.length} 个寄存器`);
 
   for (const addr of regs) {
     const rsp = await sendRegReq({
@@ -857,7 +1655,7 @@ async function runAscRegisterReadSuite({ clear = true } = {}) {
       value: 0,
       mask: 0xffff,
     });
-    appendAscRspResult('read-list', 'READ', addr, rsp);
+    appendAscRspResult('读取列表', '读取', addr, rsp);
   }
 
   await readStatus();
@@ -867,13 +1665,13 @@ async function runAscRegisterWriteVerify({ clear = true } = {}) {
   if (clear) clearAscTestResults();
   if (!$('ascTestWriteEnable').checked) {
     appendAscTestResult({
-      step: 'write-verify',
-      op: 'SKIP',
+      step: '写入校验',
+      op: '跳过',
       addr: '--',
       expected: '--',
       actual: '--',
-      status: 'SKIPPED',
-      note: 'write verify disabled',
+      status: '已跳过',
+      note: '未启用写入校验',
       pass: false,
       warn: true,
     });
@@ -886,14 +1684,14 @@ async function runAscRegisterWriteVerify({ clear = true } = {}) {
   const mask = parseNumberStrict($('ascTestWriteMask').value) & 0xffff;
   const testValue = parseNumberStrict($('ascTestWriteValue').value) & 0xffff;
 
-  if (addr > 0x7f) throw new Error(`safe register out of range ${hex(addr, 2)}`);
-  if (mask === 0) throw new Error('write mask must be non-zero');
+  if (addr > 0x7f) throw new Error(`安全寄存器超出范围：${hex(addr, 2)}`);
+  if (mask === 0) throw new Error('写入掩码不能为零');
 
   let original = 0;
   let originalKnown = false;
   let wrote = false;
 
-  log(`ASC register write verify: addr=${hex(addr, 2)} mask=${hex(mask, 4)} value=${hex(testValue, 4)}`);
+  log(`ASC 寄存器写入校验：地址=${hex(addr, 2)} 掩码=${hex(mask, 4)} 数值=${hex(testValue, 4)}`);
 
   try {
     const readRsp = await sendRegReq({
@@ -904,7 +1702,7 @@ async function runAscRegisterWriteVerify({ clear = true } = {}) {
       value: 0,
       mask: 0xffff,
     });
-    appendAscRspResult('write-verify', 'READ_ORIG', addr, readRsp);
+    appendAscRspResult('写入校验', '读取原值', addr, readRsp);
     if (readRsp.status !== REG.OK) return;
 
     original = readRsp.value;
@@ -920,7 +1718,7 @@ async function runAscRegisterWriteVerify({ clear = true } = {}) {
       mask,
     });
     wrote = writeRsp.status === REG.OK;
-    appendAscRspResult('write-verify', 'UPDATE', addr, writeRsp, hex(expected, 4));
+    appendAscRspResult('写入校验', '更新位', addr, writeRsp, hex(expected, 4));
     if (writeRsp.status !== REG.OK) return;
 
     const verifyRsp = await sendRegReq({
@@ -933,13 +1731,13 @@ async function runAscRegisterWriteVerify({ clear = true } = {}) {
     });
     const pass = verifyRsp.status === REG.OK && ((verifyRsp.value & mask) === (testValue & mask));
     appendAscTestResult({
-      step: 'write-verify',
-      op: 'VERIFY',
+      step: '写入校验',
+      op: '校验',
       addr: hex(addr, 2),
       expected: hex(expected, 4),
       actual: verifyRsp.status === REG.OK ? hex(verifyRsp.value, 4) : '--',
-      status: pass ? 'OK' : regStatusName(verifyRsp.status),
-      note: pass ? 'masked bits match' : 'masked bits mismatch',
+      status: pass ? '正常' : regStatusName(verifyRsp.status),
+      note: pass ? '掩码位匹配' : '掩码位不匹配',
       pass,
     });
   } finally {
@@ -952,7 +1750,7 @@ async function runAscRegisterWriteVerify({ clear = true } = {}) {
         value: original,
         mask,
       });
-      appendAscRspResult('restore', 'RESTORE', addr, restoreRsp, hex(original, 4));
+      appendAscRspResult('恢复', '恢复原值', addr, restoreRsp, hex(original, 4));
 
       const finalRsp = await sendRegReq({
         target: 1,
@@ -964,13 +1762,13 @@ async function runAscRegisterWriteVerify({ clear = true } = {}) {
       });
       const restored = finalRsp.status === REG.OK && ((finalRsp.value & mask) === (original & mask));
       appendAscTestResult({
-        step: 'restore',
-        op: 'READ_BACK',
+        step: '恢复',
+        op: '回读',
         addr: hex(addr, 2),
         expected: hex(original, 4),
         actual: finalRsp.status === REG.OK ? hex(finalRsp.value, 4) : '--',
-        status: restored ? 'OK' : regStatusName(finalRsp.status),
-        note: restored ? 'masked bits restored' : 'restore mismatch',
+        status: restored ? '正常' : regStatusName(finalRsp.status),
+        note: restored ? '掩码位已恢复' : '恢复值不匹配',
         pass: restored,
       });
     }
@@ -986,15 +1784,24 @@ async function runAscRegisterFullFlow() {
 
 function exportAscRegisterCsv() {
   if (state.ascRegTestRows.length === 0) {
-    log('ASC register CSV skipped: no rows');
+    log('ASC 寄存器 CSV 未导出：没有结果行');
     return;
   }
 
-  const columns = ['time', 'step', 'op', 'addr', 'expected', 'actual', 'status', 'note'];
+  const columns = [
+    ['time', '时间'],
+    ['step', '步骤'],
+    ['op', '操作'],
+    ['addr', '地址'],
+    ['expected', '期望值'],
+    ['actual', '实际值'],
+    ['status', '状态'],
+    ['note', '说明'],
+  ];
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
   const csv = [
-    columns.join(','),
-    ...state.ascRegTestRows.map((row) => columns.map((column) => escape(row[column])).join(',')),
+    columns.map(([, label]) => label).join(','),
+    ...state.ascRegTestRows.map((row) => columns.map(([key]) => escape(row[key])).join(',')),
   ].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -1004,7 +1811,7 @@ function exportAscRegisterCsv() {
   link.download = `asc_register_test_${stamp}.csv`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  log(`ASC register CSV exported: ${state.ascRegTestRows.length} row(s)`);
+  log(`ASC 寄存器 CSV 已导出：${state.ascRegTestRows.length} 行`);
 }
 
 function drawSamples() {
@@ -1115,7 +1922,7 @@ function cborDecode(bytes) {
 
   function ensureAvailable(length) {
     if (offset + length > data.length) {
-      throw new Error('Truncated CBOR payload');
+      throw new Error('CBOR 数据不完整');
     }
   }
 
@@ -1143,7 +1950,7 @@ function cborDecode(bytes) {
       const value = (BigInt(high >>> 0) << 32n) | BigInt(low >>> 0);
       return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value;
     }
-    throw new Error(`Unsupported CBOR length ${add}`);
+    throw new Error(`不支持的 CBOR 长度：${add}`);
   }
 
   function readDefiniteBytes(expectedMajor, add) {
@@ -1161,12 +1968,12 @@ function cborDecode(bytes) {
       const major = head >> 5;
       const add = head & 0x1f;
       if (major !== expectedMajor || add === 31) {
-        throw new Error(`Invalid indefinite CBOR chunk 0x${head.toString(16)}`);
+        throw new Error(`不合法的不定长 CBOR 数据块：0x${head.toString(16)}`);
       }
       const chunk = readDefiniteBytes(expectedMajor, add);
       chunks.push(chunk);
     }
-    if (offset >= data.length) throw new Error('Unterminated indefinite CBOR item');
+    if (offset >= data.length) throw new Error('不定长 CBOR 数据项未结束');
     offset += 1;
 
     if (expectedMajor === 3) return chunks.join('');
@@ -1199,7 +2006,7 @@ function cborDecode(bytes) {
         while (offset < data.length && data[offset] !== 0xff) {
           value.push(readItem());
         }
-        if (offset >= data.length) throw new Error('Unterminated indefinite CBOR array');
+        if (offset >= data.length) throw new Error('不定长 CBOR 数组未结束');
         offset += 1;
         return value;
       }
@@ -1212,7 +2019,7 @@ function cborDecode(bytes) {
         while (offset < data.length && data[offset] !== 0xff) {
           obj[readItem()] = readItem();
         }
-        if (offset >= data.length) throw new Error('Unterminated indefinite CBOR map');
+        if (offset >= data.length) throw new Error('不定长 CBOR 映射未结束');
         offset += 1;
         return obj;
       }
@@ -1228,7 +2035,7 @@ function cborDecode(bytes) {
       if (add === 21) return true;
       if (add === 22) return null;
     }
-    throw new Error(`Unsupported CBOR item 0x${head.toString(16)}`);
+    throw new Error(`不支持的 CBOR 数据项：0x${head.toString(16)}`);
   }
 
   return readItem();
@@ -1292,7 +2099,7 @@ class SmpClient {
     const response = new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(seq);
-        reject(new Error('SMP response timeout'));
+        reject(new Error('等待 SMP 响应超时'));
       }, timeoutMs);
       this.pending.set(seq, {
         resolve: (value) => {
@@ -1316,9 +2123,9 @@ class SmpClient {
     const err = result.body?.err;
     const rc = result.body?.rc ?? err?.rc ?? 0;
     if (rc !== 0) {
-      const name = SMP_RC_NAMES[rc] || `RC_${rc}`;
-      const group = err?.group !== undefined ? ` group=${err.group}` : '';
-      throw new Error(`SMP rc=${rc} (${name})${group}`);
+      const name = SMP_RC_NAMES[rc] || `未知返回码_${rc}`;
+      const group = err?.group !== undefined ? `，分组=${err.group}` : '';
+      throw new Error(`SMP 返回码=${rc}（${name}）${group}`);
     }
     return result.body;
   }
@@ -1337,7 +2144,7 @@ function formatBytes(value) {
 }
 
 function formatTimestamp(value) {
-  if (!Number.isFinite(value) || value <= 0) return 'mtime unknown';
+  if (!Number.isFinite(value) || value <= 0) return '修改时间未知';
   return new Date(value).toLocaleString();
 }
 
@@ -1383,18 +2190,18 @@ function isValidImageHash(hash) {
 
 function imageStateSummary(body) {
   const images = Array.isArray(body?.images) ? body.images : [];
-  if (images.length === 0) return 'no images';
+  if (images.length === 0) return '没有镜像';
   return images.map((image) => {
     const hash = normalizeBytes(image.hash);
     const slot = image.image !== undefined ? `${image.image}:${image.slot}` : `${image.slot}`;
     const flags = [
-      flagSet(image.active) ? 'active' : '',
-      flagSet(image.pending) ? 'pending' : '',
-      flagSet(image.confirmed) ? 'confirmed' : '',
-      flagSet(image.permanent) ? 'permanent' : '',
-      flagClear(image.bootable) ? 'not-bootable' : '',
+      flagSet(image.active) ? '当前运行' : '',
+      flagSet(image.pending) ? '待启动' : '',
+      flagSet(image.confirmed) ? '已确认' : '',
+      flagSet(image.permanent) ? '永久' : '',
+      flagClear(image.bootable) ? '不可启动' : '',
     ].filter(Boolean).join(',');
-    return `slot=${slot} version=${image.version || '--'} ${flags || 'idle'} hash=${bytesToHex(hash).slice(0, 16)}... len=${hash?.length || 0}`;
+    return `槽位=${slot} 版本=${image.version || '--'} ${flags || '空闲'} 哈希=${bytesToHex(hash).slice(0, 16)}… 长度=${hash?.length || 0}`;
   }).join(' | ');
 }
 
@@ -1446,7 +2253,7 @@ function parseMcuBootImageInfo(bytes) {
 }
 
 function otaVersionLabel(info) {
-  return info?.version ? `v${info.version}` : 'version unknown';
+  return info?.version ? `版本 ${info.version}` : '版本未知';
 }
 
 async function readOtaFile(file) {
@@ -1474,7 +2281,7 @@ function findEocd(bytes) {
       return i;
     }
   }
-  throw new Error('ZIP EOCD not found');
+  throw new Error('未找到 ZIP 文件结束记录');
 }
 
 async function extractBinFromZip(bytes) {
@@ -1487,7 +2294,7 @@ async function extractBinFromZip(bytes) {
   let ptr = cdOffset;
 
   for (let i = 0; i < entries; i += 1) {
-    if (view.getUint32(ptr, true) !== 0x02014b50) throw new Error('Invalid ZIP central directory');
+    if (view.getUint32(ptr, true) !== 0x02014b50) throw new Error('ZIP 中央目录无效');
     const method = view.getUint16(ptr + 10, true);
     const compressedSize = view.getUint32(ptr + 20, true);
     const fileNameLength = view.getUint16(ptr + 28, true);
@@ -1510,17 +2317,17 @@ async function extractBinFromZip(bytes) {
         target = files.find((file) => file.name.endsWith(manifestBin)) || target;
       }
     } catch (error) {
-      log(`Manifest ignored: ${error.message}`);
+      log(`已忽略清单文件：${error.message}`);
     }
   }
 
-  if (!target) throw new Error('No .bin image found in ZIP');
+  if (!target) throw new Error('ZIP 文件中没有找到 .bin 镜像');
   return { name: target.name, bytes: await extractZipEntry(bytes, view, target) };
 }
 
 async function extractZipEntry(bytes, view, entry) {
   const local = entry.localOffset;
-  if (view.getUint32(local, true) !== 0x04034b50) throw new Error(`Invalid local header for ${entry.name}`);
+  if (view.getUint32(local, true) !== 0x04034b50) throw new Error(`${entry.name} 的本地文件头无效`);
   const fileNameLength = view.getUint16(local + 26, true);
   const extraLength = view.getUint16(local + 28, true);
   const start = local + 30 + fileNameLength + extraLength;
@@ -1528,17 +2335,17 @@ async function extractZipEntry(bytes, view, entry) {
   if (entry.method === 0) return compressed;
   if (entry.method === 8) {
     if (!('DecompressionStream' in window)) {
-      throw new Error('This browser cannot inflate ZIP entries');
+      throw new Error('当前浏览器无法解压 ZIP 文件项');
     }
     const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
     return new Uint8Array(await new Response(stream).arrayBuffer());
   }
-  throw new Error(`Unsupported ZIP compression method ${entry.method}`);
+  throw new Error(`不支持的 ZIP 压缩方式：${entry.method}`);
 }
 
 async function uploadOta() {
-  if (!state.smp) throw new Error('SMP OTA characteristic is not ready');
-  if (!state.otaBytes) throw new Error('Please choose an OTA .bin or dfu_application.zip');
+  if (!state.smp) throw new Error('SMP OTA 特征尚未就绪');
+  if (!state.otaBytes) throw new Error('请选择 OTA .bin 或 dfu_application.zip 文件');
 
   const image = state.otaBytes;
   let offset = 0;
@@ -1548,63 +2355,63 @@ async function uploadOta() {
 
   $('otaUploadBtn').disabled = true;
   try {
-    setOtaProgress(0, image.length, `hashing image ${versionLabel}`);
+    setOtaProgress(0, image.length, `正在计算镜像哈希：${versionLabel}`);
     await nextFrame();
     const hash = await sha256(image);
 
-    log(`OTA upload start: ${state.otaName}, ${formatBytes(image.length)}, ${versionLabel}, selected ${formatTimestamp(state.otaSourceModifiedMs)}`);
+    log(`OTA 开始上传：${state.otaName}，${formatBytes(image.length)}，${versionLabel}，选择时间 ${formatTimestamp(state.otaSourceModifiedMs)}`);
     while (offset < image.length) {
       const chunk = image.slice(offset, Math.min(image.length, offset + chunkSize));
       const body = offset === 0
         ? { off: offset, len: image.length, sha: hash, data: chunk }
         : { off: offset, data: chunk };
 
-      setOtaProgress(offset, image.length, `sending chunk @ ${formatBytes(offset)}`);
+      setOtaProgress(offset, image.length, `正在发送分块：${formatBytes(offset)}`);
       await nextFrame();
       const response = await state.smp.command(SMP.GROUP_IMAGE, SMP.IMG_UPLOAD, SMP.OP_WRITE, body, 20000);
       const nextOffset = Number(response.off ?? (offset + chunk.length));
       if (!Number.isFinite(nextOffset) || nextOffset <= offset) {
-        throw new Error(`Invalid SMP upload offset ${response.off}`);
+        throw new Error(`SMP 上传偏移量无效：${response.off}`);
       }
 
       offset = Math.min(nextOffset, image.length);
       const percent = Math.floor((offset / image.length) * 100);
-      setOtaProgress(offset, image.length, 'uploading');
+      setOtaProgress(offset, image.length, '正在上传');
       if (percent >= lastLoggedPercent + 5 || offset === image.length) {
         lastLoggedPercent = percent;
-        log(`OTA upload ${percent}% (${offset}/${image.length})`);
+        log(`OTA 上传 ${percent}%（${offset}/${image.length}）`);
       }
       await delay(18);
     }
 
-    setOtaProgress(image.length, image.length, 'reading image state');
+    setOtaProgress(image.length, image.length, '正在读取镜像状态');
     await nextFrame();
     const imageStateBody = await readImageStateBody();
-    log(`Image state after upload: ${imageStateSummary(imageStateBody)}`);
+    log(`上传后的镜像状态：${imageStateSummary(imageStateBody)}`);
     const testSelection = findTestBootImage(imageStateBody);
     if (testSelection.duplicateActive) {
-      setOtaProgress(image.length, image.length, 'complete - image matches active; no test boot marked');
-      log(`OTA upload complete, but slot=${testSelection.duplicateActive.slot} hash matches the active image. Build/sign a different firmware image before testing reboot swap.`);
+      setOtaProgress(image.length, image.length, '已完成：镜像与当前运行镜像相同，未标记测试启动');
+      log(`OTA 上传完成，但槽位=${testSelection.duplicateActive.slot} 的哈希与当前运行镜像相同。请重新构建/签名不同的固件镜像后再测试重启切换。`);
       if (state.otaInfo?.version && testSelection.duplicateActive.version && state.otaInfo.version !== testSelection.duplicateActive.version) {
-        log(`Selected OTA file is ${otaVersionLabel(state.otaInfo)}, but image state still reports ${testSelection.duplicateActive.version}. Reselect the rebuilt zip/bin and retry.`);
+        log(`所选 OTA 文件为 ${otaVersionLabel(state.otaInfo)}，但镜像状态仍显示 ${testSelection.duplicateActive.version}。请重新选择新构建的 zip/bin 后重试。`);
       }
       return;
     }
     if (!testSelection.image) {
-      throw new Error('No non-active bootable image hash found in image state');
+      throw new Error('镜像状态中没有找到可启动的非当前镜像哈希');
     }
 
     const testImage = testSelection.image;
-    setOtaProgress(image.length, image.length, 'marking test boot');
+    setOtaProgress(image.length, image.length, '正在标记测试启动');
     await nextFrame();
     await state.smp.command(SMP.GROUP_IMAGE, SMP.IMG_STATE, SMP.OP_WRITE, {
       hash: testImage.hash,
       confirm: false,
     });
-    setOtaProgress(image.length, image.length, 'complete - press Reset to boot test image');
-    log(`OTA image marked for test boot: slot=${testImage.slot}, hash=${bytesToHex(testImage.hash).slice(0, 16)}...; press Reset to reboot into it`);
+    setOtaProgress(image.length, image.length, '已完成：请点击“重启”启动测试镜像');
+    log(`OTA 镜像已标记为测试启动：槽位=${testImage.slot}，哈希=${bytesToHex(testImage.hash).slice(0, 16)}…；点击“重启”后进入该镜像`);
   } catch (error) {
-    setOtaProgress(offset, image.length, `failed: ${error.message}`);
+    setOtaProgress(offset, image.length, `失败：${error.message}`);
     throw error;
   } finally {
     $('otaUploadBtn').disabled = false;
@@ -1612,21 +2419,21 @@ async function uploadOta() {
 }
 
 async function resetBySmp() {
-  if (!state.smp) throw new Error('SMP OTA characteristic is not ready');
+  if (!state.smp) throw new Error('SMP OTA 特征尚未就绪');
   try {
-    $('otaProgressText').textContent = 'reset command sent - reconnect after reboot';
+    $('otaProgressText').textContent = '已发送重启命令，请在设备重启后重新连接';
     await state.smp.command(SMP.GROUP_OS, SMP.OS_RESET, SMP.OP_WRITE, {}, 2000);
   } catch (error) {
-    $('otaProgressText').textContent = 'reset command sent - reconnect after reboot';
-    log(`Reset command sent: ${error.message}`);
+    $('otaProgressText').textContent = '已发送重启命令，请在设备重启后重新连接';
+    log(`已发送重启命令：${error.message}`);
   }
 }
 
 async function imageState() {
-  if (!state.smp) throw new Error('SMP OTA characteristic is not ready');
+  if (!state.smp) throw new Error('SMP OTA 特征尚未就绪');
   const body = await readImageStateBody();
-  $('otaProgressText').textContent = 'image state read - see event log';
-  log(`Image state: ${imageStateSummary(body)}`);
+  $('otaProgressText').textContent = '已读取镜像状态，请查看事件日志';
+  log(`镜像状态：${imageStateSummary(body)}`);
 }
 
 function bindUi() {
@@ -1634,7 +2441,7 @@ function bindUi() {
   updateDeviceFilterUi();
   updateRuntimeEnvironment();
   setConnected(false);
-  log(`Web Console build ${WEB_CONSOLE_BUILD}`);
+  log(`网页测试控制台版本 ${WEB_CONSOLE_BUILD}`);
   $('deviceFilterMode').addEventListener('change', updateDeviceFilterUi);
   $('connectBtn').addEventListener('click', () => run(connect));
   $('disconnectBtn').addEventListener('click', () => run(disconnect));
@@ -1661,6 +2468,38 @@ function bindUi() {
   $('ascTestFullBtn').addEventListener('click', () => run(() => runAscRegisterFullFlow()));
   $('ascTestClearBtn').addEventListener('click', clearAscTestResults);
   $('ascTestExportBtn').addEventListener('click', exportAscRegisterCsv);
+  $('sivyTestSnapshotBtn').addEventListener('click', () => run(runSivySnapshot));
+  $('sivyTestInitWriteBtn').addEventListener('click', () => run(runSivySelectedInitWrite));
+  $('sivyTestClearBtn').addEventListener('click', clearSivyTestResults);
+  $('sivyTestExportBtn').addEventListener('click', exportSivyTestCsv);
+  const ch1ControlIds = [
+    'ch1Enable', 'ch1PgaGain', 'ch1VthMv', 'ch1FeatSel', 'ch1AvgTriggerEnable',
+    'ch1AvgTriggerEdge', 'ch1WorkWindow', 'ch1WaitWindow',
+  ];
+  for (const id of ch1ControlIds) {
+    $(id).addEventListener('input', renderCh1RegisterPlan);
+    $(id).addEventListener('change', renderCh1RegisterPlan);
+  }
+  $('ch1ReadBtn').addEventListener('click', () => run(() => readCh1Registers()));
+  $('ch1WriteBtn').addEventListener('click', () => run(writeCh1Registers));
+  $('ch1ClearBtn').addEventListener('click', clearCh1Results);
+  $('ch1ExportBtn').addEventListener('click', exportCh1Results);
+  renderCh1RegisterPlan();
+  $('powerLevel').addEventListener('input', () => {
+    state.powerReadback = null;
+    $('powerDecodeWarning').textContent = '';
+    renderPowerControl();
+  });
+  $('powerLevel').addEventListener('change', () => {
+    state.powerReadback = null;
+    $('powerDecodeWarning').textContent = '';
+    renderPowerControl();
+  });
+  $('powerReadBtn').addEventListener('click', () => run(() => readPowerControl()));
+  $('powerWriteBtn').addEventListener('click', () => run(writePowerControl));
+  $('powerClearBtn').addEventListener('click', clearPowerResults);
+  $('powerExportBtn').addEventListener('click', exportPowerResults);
+  renderPowerControl();
   $('sampleCh0Btn').addEventListener('click', () => run(() => ctrl(CTRL.FORCE_SAMPLE, 0)));
   $('sampleCh1Btn').addEventListener('click', () => run(() => ctrl(CTRL.FORCE_SAMPLE, 1)));
   $('resetBtn').addEventListener('click', () => run(resetBySmp));
@@ -1669,8 +2508,8 @@ function bindUi() {
   $('clearLogBtn').addEventListener('click', () => { logView.textContent = ''; });
   $('clearSamplesBtn').addEventListener('click', () => {
     state.samples = [];
-    $('sampleCount').textContent = '0 samples';
-    $('latestSample').textContent = 'latest --';
+    $('sampleCount').textContent = '0 个采样';
+    $('latestSample').textContent = '最新值：--';
     drawSamples();
   });
   for (const button of document.querySelectorAll('.segment')) {
@@ -1691,11 +2530,11 @@ function bindUi() {
       const versionLabel = otaVersionLabel(image.info);
       $('otaFileName').textContent = image.name;
       $('otaFileSize').textContent = `${formatBytes(image.bytes.length)} / ${versionLabel}`;
-      setOtaProgress(0, image.bytes.length, `ready - ${versionLabel}`);
-      log(`OTA image loaded: ${image.name}, ${formatBytes(image.bytes.length)}, ${versionLabel}, selected ${formatTimestamp(state.otaSourceModifiedMs)}`);
+      setOtaProgress(0, image.bytes.length, `已就绪：${versionLabel}`);
+      log(`OTA 镜像已加载：${image.name}，${formatBytes(image.bytes.length)}，${versionLabel}，选择时间 ${formatTimestamp(state.otaSourceModifiedMs)}`);
     } catch (error) {
-      $('otaProgressText').textContent = `load failed: ${error.message}`;
-      log(`OTA load failed: ${error.message}`);
+      $('otaProgressText').textContent = `加载失败：${error.message}`;
+      log(`OTA 加载失败：${error.message}`);
     }
   });
   window.addEventListener('resize', drawSamples);
@@ -1706,7 +2545,7 @@ async function run(task) {
   try {
     await task();
   } catch (error) {
-    log(`Error: ${webBluetoothHint(error)}`);
+    log(`错误：${webBluetoothHint(error)}`);
   }
 }
 

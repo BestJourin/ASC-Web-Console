@@ -1,4 +1,4 @@
-# ASC Web Console 设计与实现说明
+# Sivy ASC CH1 寄存器控制台设计与实现说明
 
 ## 目标
 
@@ -10,6 +10,11 @@ Web Console 面向板级 bring-up 和现场调试，目标是替代一部分 UAR
 4. 订阅 ADC_DATA notification，并在浏览器 canvas 中显示 CH0/CH1 采样曲线。
 5. 读取本地 OTA 镜像，并通过标准 MCUmgr SMP over BLE 上传、测试启动和复位。
 6. 支持可配置 BLE 选择策略，避免固件广播名变化后网页无法检索设备。
+7. 对 `firmware/sivy_asc_test` 的 Sivy-1 I2C 默认值快照进行设备侧和网页侧双重校验，避免旧固件参考值误导测试结论。
+8. 用配置控件计算 `CH1` 的字段移位和掩码更新值，写入后自动读回并反解控件。
+
+本目录从正式 `tools/asc_web_console` 复制而来，但测试专用协议只适用于
+`Sivy_ASC_Test`。正式 `Sivy_ASC_V0` 固件不实现该协议，必须使用正式网页。
 
 ## 页面结构
 
@@ -52,6 +57,8 @@ ASC 自定义 service 使用一个固定 128-bit UUID 前缀：
 | `04` | ADC_DATA | notify | ADC 采样数据流。 |
 | `05` | REG_REQ | write | 上位机发起 ASC/DAC/MCU/诊断/profile 寄存器访问请求。 |
 | `06` | REG_RSP | notify | 固件返回 REG_REQ 的异步响应，使用 seq 匹配。 |
+| `07` | SIVY_TEST_CTRL | write | 启动 Sivy-1 默认值快照或显式默认值写回。 |
+| `08` | SIVY_TEST_RESULT | notify | 逐项返回 16-bit 寄存器结果并发送最终汇总。 |
 
 所有二进制字段均为 little-endian，和 nRF54L15 原生端序一致。
 
@@ -97,7 +104,84 @@ CTRL_CMD 新增 opcode：
 | `Restore` | 写校验后发送 `UPDATE_BITS(value=original, mask=mask)` 并回读。 | 表格记录 masked bits 是否恢复。 |
 | `Export CSV` | 不访问设备，只导出当前浏览器内存中的结果表。 | CSV 用于芯片编号/板卡编号归档。 |
 
-默认 `Mask=0x0000`，因此写校验必须由测试人员显式填写非零 mask 后才能运行。网页不判断寄存器是否安全可写，安全寄存器和 mask 必须来自 `Sivy-1芯片寄存器表.xlsx`、设计报告或芯片设计确认。
+默认 `Mask=0x0000`，因此写校验必须由测试人员显式填写非零 mask 后才能运行。网页不判断寄存器是否安全可写，安全寄存器和 mask 必须来自 `Sivy-1芯片寄存器表格_v4p4_20260710.xlsx`、设计报告或芯片设计确认。
+
+## Sivy I2C Reference Test
+
+测试专用 BLE 协议由 `firmware/sivy_asc_test` 实现，并使用以下 UUID：
+
+```text
+SIVY_TEST_CTRL   41534307-7a6d-4ef9-9c6b-5c5940000001
+SIVY_TEST_RESULT 41534308-7a6d-4ef9-9c6b-5c5940000001
+```
+
+控制包固定为 2 bytes：`u8 seq`、`u8 opcode`。`0x01` 读取 29 个可读
+寄存器并比较默认值；`0x02` 只在用户勾选确认后写入并回读
+`PW_CTRL[0x38]=0x36DB`。Excel 定义的 `GLB_RST[0x08]` 是只写软复位，
+因此不属于 29 项快照。
+
+结果通知固定为 16 bytes little-endian：`seq`、`type`、`status`、`index`、
+`reg`、reserved、`expected`、`actual`、`match_count`、`mismatch_count`、
+`io_error_count`。网页不只显示固件上报的 `expected`：它还内置 Excel v4p4
+的 29 项参考值。若设备仍上报旧的 `0x38=0x0000`，表格显示“固件期望值不一致”，
+最终汇总为失败，CSV 同时保留网页期望值和固件期望值以便追溯。
+
+## CH1 位域配置
+
+CH1 面板复用已存在的 `REG_REQ/REG_RSP` 特征（UUID 后缀 `05/06`），不新增
+固件协议，也不修改 `tools/sivy_asc_test_console`。所有寄存器访问使用
+`target=ASC I2C`、`width=16-bit`，写入使用 `UPDATE_BITS`：
+
+| 寄存器 | 地址 | value 计算 | mask |
+| --- | --- | --- | --- |
+| `CH1_CTRL` | `0x16` | `CH_EN << 0 | PGA_GAIN << 2 | VTH << 8` | `0xFF3D` |
+| `CH1_FEAT` | `0x18` | `FEAT_SEL << 0 | AVG_TRG_EN << 1 | AVG_TRG_HA << 2` | `0x000F` |
+| `CH1_AVG_WORKWIN` | `0x1A` | `WORK_WINDOW` | `0x0FFF` |
+| `CH1_AVG_WAITWIN` | `0x1C` | `WAIT_WINDOW` | `0x0FFF` |
+
+页面实时展示 value、mask 与字段变量。写入流程必须先由用户确认，然后可选打开
+ASC 外部电源，依次发送四个 `UPDATE_BITS` 请求，最后按相同地址读取。比较时仅
+比较 mask 内的可写位；保留位不参与通过/失败判定。所有四项读取成功时，页面把
+实际位域反解回控件。`AVG_TRG_HA=0b11` 是保留值，读回时显示警告且不会被当作
+可配置边沿写入。
+
+Excel 为 `VTH[15:8]` 定义 `0x00..0xFF` 对应 `8..2048 mV`。页面只向用户显示和
+接受 mV，使用精确换算：
+
+```text
+VTH_code = VTH_mV / 8 - 1
+VTH_mV   = (VTH_code + 1) * 8
+```
+
+因此 VTH 输入范围为 `8..2048 mV`，且必须为 `8 mV` 的整数档；页面不会对任意
+mV 输入静默取整，避免阈值与用户设置不一致。
+
+## PW_CTRL 功耗挡位控制
+
+功耗控制面板同样复用 `REG_REQ/REG_RSP`，不新增 BLE 特征，也不修改
+`tools/sivy_asc_test_console` 或 `firmware/sivy_asc_test`。Excel v4p4 定义的
+`PW_CTRL`（旧名称 `CPW_CTRL`）位域如下：
+
+| 字段 | 位段 | shift |
+| --- | --- | --- |
+| `PWR_CTL` | `[2:0]` | 0 |
+| `PW_AMPIN` | `[5:3]` | 3 |
+| `PW_PGA` | `[8:6]` | 6 |
+| `PW_SAMPAMP` | `[11:9]` | 9 |
+| `PW_COMP` | `[14:12]` | 12 |
+
+网页的一个滑块给五个字段应用同一 `level`（`0..7`）：
+
+```text
+value = (level << 0) | (level << 3) | (level << 6) | (level << 9) | (level << 12)
+mask  = 0x7FFF
+```
+
+`level=0..7` 分别代表 `25%`、`50%`、`75%`、`100%`、`125%`、`150%`、`175%` 和
+`200%` 的模拟功耗比例。`level=3` 的值为 `0x36DB`，也是 Excel 的默认值。写入请求
+使用 `UPDATE_BITS`，因此保留的 bit 15 不变；写后读取 `0x38` 并只比较 `mask` 内的
+位。读取到非统一挡位时，页面会逐字段可视化实际比例、提示用户，并把滑块定位为
+`PWR_CTL` 的值，只有用户主动移动滑块并确认写入才会使五个字段重新联动。
 
 ## OTA 设计
 
@@ -121,3 +205,13 @@ OTA 不重新定义 ASC 私有协议，而是直接使用 Zephyr/NCS 标准 MCUm
 - 不把数据发出浏览器本地环境。
 - 依赖固件端的 BLE SMP 权限配置；当前 `CONFIG_MCUMGR_TRANSPORT_BT_PERM_RW=y` 只适合调试。
 - 量产前应加入 BLE pairing/bonding、SMP 认证、私有 signing key 和固定分区表。
+
+## 发布边界
+
+本仓库的 GitHub Pages workflow 会从 `main` 部署该控制台。部署页面连接的是
+`Sivy_ASC_Test` 测试固件，包含 CH1、`PW_CTRL` 写入和 BLE OTA，因此仅限受控
+bring-up 环境使用，不是生产设备管理后台。
+
+Web Bluetooth 仍要求浏览器用户主动选择和授权设备，但公开部署前必须审查 BLE
+写权限、OTA 权限和寄存器参考资料的发布范围。量产系统需要独立实现 pairing/bonding、
+SMP 认证、私有签名密钥和固定分区表。
