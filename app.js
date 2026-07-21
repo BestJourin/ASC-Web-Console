@@ -1,6 +1,6 @@
 'use strict';
 
-const WEB_CONSOLE_BUILD = '20260721-i18n-ota';
+const WEB_CONSOLE_BUILD = '20260721-i18n-logfix';
 
 const UUIDS = {
   ascService: '41534300-7a6d-4ef9-9c6b-5c5940000001',
@@ -223,6 +223,7 @@ const LANGUAGE_TEXT_EN = Object.freeze({
   '说明': 'Notes', 'Sivy I2C 参考测试': 'Sivy I2C Reference Test',
   '由固件读取参考文件中的全部 29 个寄存器并在设备侧比较；网页显示逐项通知和最终通过/失败汇总。': 'The firmware reads all 29 reference registers and compares them on the device. This page shows each result notification and the final pass/fail summary.',
   '执行只读快照': 'Run read-only snapshot', '允许写 PW_CTRL（CPW_CTRL）[0x38] = 0x36DB': 'Allow PW_CTRL (CPW_CTRL) [0x38] = 0x36DB write',
+  '请先确认允许写入 PW_CTRL（CPW_CTRL）[0x38] = 0x36DB': 'Confirm that writing PW_CTRL (CPW_CTRL) [0x38] = 0x36DB is allowed first.',
   '执行选定的初始化写入': 'Run selected initialization write', '等待固件测试结果': 'Waiting for firmware test results',
   '序号': 'Index', '名称': 'Name', '结果': 'Result', '匹配/不匹配/I2C 错误': 'Match / mismatch / I2C errors',
   'CH1 寄存器配置': 'CH1 Register Configuration', '读取 CH1 并反解': 'Read and decode CH1',
@@ -318,7 +319,7 @@ function englishText(value) {
 
 function textNodeCanBeLocalized(node) {
   const tagName = node.parentElement?.tagName;
-  return tagName !== 'SCRIPT' && tagName !== 'STYLE';
+  return tagName !== 'SCRIPT' && tagName !== 'STYLE' && tagName !== 'PRE';
 }
 
 function localizeTextNode(node) {
