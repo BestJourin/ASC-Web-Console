@@ -193,8 +193,206 @@ const logView = $('logView');
 const canvas = $('sampleCanvas');
 const ctx = canvas.getContext('2d');
 
+const LANGUAGE_STORAGE_KEY = 'sivy-asc-console-language';
+const LANGUAGE_TEXT_EN = Object.freeze({
+  'Sivy ASC CH1 寄存器控制台': 'Sivy ASC CH1 Test Console',
+  'Sivy ASC CH1 位域配置': 'Sivy ASC CH1 Bitfield Configuration',
+  '通道一寄存器控制台': 'Channel 1 Register Console',
+  '未连接': 'Disconnected', '已连接': 'Connected', '扫描范围': 'Scan scope', '全部设备': 'All devices',
+  '名称前缀': 'Name prefix', '目标服务': 'Target service', '前缀': 'Prefix', '连接设备': 'Connect device',
+  '断开': 'Disconnect', '运行环境': 'Runtime environment', '页面来源': 'Page origin', '安全上下文': 'Secure context',
+  '网页蓝牙': 'Web Bluetooth', '蓝牙适配器': 'Bluetooth adapter', '本机蓝牙': 'Local Bluetooth',
+  '状态': 'Status', '刷新状态': 'Refresh status', '电源': 'Power', '蓝牙': 'Bluetooth', '指示灯': 'LED',
+  '采样通知': 'Sample notifications', 'ADC 成功': 'ADC OK', 'ADC 错误': 'ADC errors', 'DAC 成功': 'DAC OK',
+  'I2C 错误': 'I2C errors', '应用状态': 'Application state', '配置档': 'Profile', '队列': 'Queue',
+  '蓝牙丢弃': 'Bluetooth drops', '打开电源': 'Power on', '关闭电源': 'Power off', '开始布防': 'Start arm',
+  '停止布防': 'Stop arm', '低功耗': 'Low power', '探测 DAC': 'Probe DAC', '清计数': 'Clear counters',
+  '参数': 'Configuration', '读取': 'Read', '输入模式': 'Input mode', '双极性': 'Bipolar', '单边': 'Single-ended',
+  'ADC 数据通知': 'ADC data notifications', 'UART 采样日志': 'UART sample log', 'A 脉冲下阈值': 'A pulse low threshold',
+  'B 脉冲上阈值': 'B pulse high threshold', 'C 偏置': 'C bias', 'D 差分': 'D differential',
+  '写入配置': 'Write configuration', '应用 DAC': 'Apply DAC', '应用配置': 'Apply configuration', '默认值': 'Defaults',
+  'ASC 配置档': 'ASC profile', '应用配置档': 'Apply profile', '启用寄存器配置档': 'Enable register profile',
+  '写入后校验': 'Verify after write', '寄存器': 'Register', '目标': 'Target', 'DAC 配置': 'DAC configuration',
+  'MCU 状态': 'MCU status', '诊断计数': 'Diagnostics', '数据宽度': 'Data width', '16 位': '16-bit',
+  '32 位': '32-bit', '8 位': '8-bit', '地址': 'Address', '数值': 'Value', '掩码': 'Mask',
+  '写入': 'Write', '更新位': 'Update bits', 'ASC 寄存器测试': 'ASC Register Test', '导出 CSV': 'Export CSV',
+  '清空': 'Clear', '预设': 'Preset', '基础读取': 'Basic reads', '当前配置档': 'Current profile', '自定义': 'Custom',
+  '读取寄存器': 'Registers to read', '执行读取': 'Run reads', '执行完整流程': 'Run full flow',
+  '启用写入校验': 'Enable write verification', '安全寄存器': 'Safe register', '测试值': 'Test value',
+  '写入校验': 'Write verification', '步骤': 'Step', '操作': 'Operation', '期望值': 'Expected', '实际值': 'Actual',
+  '说明': 'Notes', 'Sivy I2C 参考测试': 'Sivy I2C Reference Test',
+  '由固件读取参考文件中的全部 29 个寄存器并在设备侧比较；网页显示逐项通知和最终通过/失败汇总。': 'The firmware reads all 29 reference registers and compares them on the device. This page shows each result notification and the final pass/fail summary.',
+  '执行只读快照': 'Run read-only snapshot', '允许写 PW_CTRL（CPW_CTRL）[0x38] = 0x36DB': 'Allow PW_CTRL (CPW_CTRL) [0x38] = 0x36DB write',
+  '执行选定的初始化写入': 'Run selected initialization write', '等待固件测试结果': 'Waiting for firmware test results',
+  '序号': 'Index', '名称': 'Name', '结果': 'Result', '匹配/不匹配/I2C 错误': 'Match / mismatch / I2C errors',
+  'CH1 寄存器配置': 'CH1 Register Configuration', '读取 CH1 并反解': 'Read and decode CH1',
+  '写入并回读校验': 'Write and verify readback', '清空结果': 'Clear results',
+  '控件只覆盖 CH1 的可写位：CH1_CTRL[0x16]、CH1_FEAT[0x18]、CH1_AVG_WORKWIN[0x1A]、CH1_AVG_WAITWIN[0x1C]。 页面实时计算位域值，并使用掩码更新保留位不变。': 'Controls cover only CH1 writable bits: CH1_CTRL[0x16], CH1_FEAT[0x18], CH1_AVG_WORKWIN[0x1A], and CH1_AVG_WAITWIN[0x1C]. Values are calculated live and masked updates preserve reserved bits.',
+  '阈值电压 VTH（mV，bits 15:8）': 'VTH threshold voltage (mV, bits 15:8)',
+  '仅支持 8 mV 整数档；页面会自动换算 VTH 原始码': 'Only 8 mV steps are supported; the page calculates the VTH register code automatically.',
+  '特征模式（FEAT_SEL，bit 0）': 'Feature mode (FEAT_SEL, bit 0)', '脉冲时间戳': 'Pulse timestamp',
+  '窗口内周期均值': 'In-window periodic average', '均值触发（AVG_TRG_EN，bit 1）': 'Average trigger (AVG_TRG_EN, bit 1)',
+  '均值触发边沿（AVG_TRG_HA，bits 3:2）': 'Average trigger edge (AVG_TRG_HA, bits 3:2)',
+  '上升沿': 'Rising edge', '下降沿': 'Falling edge', '上升沿或下降沿': 'Rising or falling edge',
+  '工作窗口（bits 11:0）': 'Work window (bits 11:0)', '等待窗口（bits 11:0）': 'Wait window (bits 11:0)',
+  '读写前打开 ASC 外部电源': 'Power ASC externally before read/write', '确认写入 CH1 可写位': 'Confirm CH1 writable-bit write',
+  '可写掩码': 'Writable mask', '计算值': 'Calculated value', '位域计算': 'Bitfield calculation',
+  '调整控件后会实时显示计算寄存器值；写入前需要勾选确认。': 'Adjust controls to calculate register values live; confirmation is required before writing.',
+  'ASC 功耗控制器': 'ASC Power Controller', '读取并反解': 'Read and decode', '应用挡位并回读': 'Apply level and read back',
+  '一个联动滑块同步配置 PW_CTRL（旧名 CPW_CTRL）[0x38] 的全局、输入运放、PGA、采样运放和比较器功耗。 每档对应 25% 至 200% 的模拟功耗比例；页面通过 UPDATE_BITS 掩码 0x7FFF 写入，不修改保留的 bit 15。': 'One linked slider configures global, input-amplifier, PGA, sampling-amplifier, and comparator power in PW_CTRL (formerly CPW_CTRL) [0x38]. Each level represents 25% to 200% analog power. The page uses UPDATE_BITS with mask 0x7FFF and preserves bit 15.',
+  '写入，不修改保留的 bit 15。': 'to write without changing reserved bit 15.',
+  '功耗挡位（五路联动）': 'Power level (five fields linked)', '100%（档位 3 / 0b011）': '100% (level 3 / 0b011)',
+  'bits 2:0 · 全局': 'bits 2:0 · Global', 'bits 5:3 · 输入运放': 'bits 5:3 · Input amplifier',
+  'bits 11:9 · 采样运放': 'bits 11:9 · Sampling amplifier', 'bits 14:12 · 比较器': 'bits 14:12 · Comparator',
+  '确认写入 PW_CTRL 的五个功耗字段': 'Confirm PW_CTRL five-field write',
+  '调整滑块后会实时计算 PW_CTRL；写入前需要勾选确认。': 'Adjust the slider to calculate PW_CTRL live; confirmation is required before writing.',
+  '采样': 'Sampling', '清图': 'Clear plot', '0 个采样': '0 samples', '最新值：--': 'Latest: --',
+  '镜像状态': 'Image state', '未选择文件': 'No file selected', '空闲': 'Idle', '上传并测试': 'Upload and test',
+  '重启': 'Restart', '事件': 'Events', '0x3：1x（默认）': '0x3: 1x (default)',
+  '0x8：0.25x（低噪声档）': '0x8: 0.25x (low-noise)', '0x9：0.333x（低噪声档）': '0x9: 0.333x (low-noise)',
+  '0xA：0.4x（低噪声档）': '0xA: 0.4x (low-noise)', '0xB：0.5x（低噪声档）': '0xB: 0.5x (low-noise)',
+  '0xC：0.667x（低噪声档）': '0xC: 0.667x (low-noise)', '0xD：1x（低噪声档）': '0xD: 1x (low-noise)',
+  '0xE：1.333x（低噪声档）': '0xE: 1.333x (low-noise)', '0xF：2x（低噪声档）': '0xF: 2x (low-noise)',
+});
+
+const LANGUAGE_FRAGMENT_EN = Object.freeze([
+  ['网页测试控制台版本', 'Web test console version'], ['网页蓝牙不可用', 'Web Bluetooth unavailable'],
+  ['网页蓝牙已就绪', 'Web Bluetooth is ready'], ['当前页面不是安全上下文', 'The current page is not a secure context'],
+  ['固件期望值不一致', 'Firmware reference mismatch'], ['固件参考值与 Excel 不一致', 'Firmware reference differs from Excel'],
+  ['等待固件测试结果', 'Waiting for firmware test results'], ['正在执行测试并回传结果', 'The firmware is running the test and returning results'],
+  ['初始化写入', 'Initialization write'], ['数值不匹配', 'Value mismatch'], ['已读取并等待反解', 'Read; waiting for decode'],
+  ['已读取并反解到配置控件', 'Read and decoded into controls'], ['已读取并反解到滑块和五路功耗可视化', 'Read and decoded into slider and five-field power visualization'],
+  ['正在读取 CH1 寄存器并反解位域', 'Reading CH1 registers and decoding bitfields'], ['正在按位域掩码写入 CH1 寄存器', 'Writing CH1 registers with bitfield masks'],
+  ['正在读取 PW_CTRL 并反解五个功耗字段', 'Reading PW_CTRL and decoding five power fields'], ['正在将五个功耗字段同步写入', 'Writing the five power fields in sync'],
+  ['写入后的四个 CH1 寄存器均已回读校验通过。', 'All four CH1 registers passed readback verification.'],
+  ['PW_CTRL 的五个功耗字段已写入并回读校验通过。', 'All five PW_CTRL power fields passed write and readback verification.'],
+  ['REG_REQ 读取失败', 'REG_REQ read failed'], ['REG_REQ 更新失败', 'REG_REQ update failed'], ['等待 REG_RSP 响应超时', 'Timed out waiting for REG_RSP'],
+  ['请先确认允许写入', 'Confirm that writing is allowed first'], ['写入前需要勾选确认', 'confirmation is required before writing'],
+  ['可写位与计算值一致', 'Writable bits match the calculated value'], ['保留位未参与比较', 'Reserved bits are excluded from comparison'],
+  ['掩码位匹配', 'Masked bits match'], ['掩码位不匹配', 'Masked bits do not match'], ['掩码位已恢复', 'Masked bits restored'],
+  ['恢复值不匹配', 'Restored value mismatch'], ['读取完成：', 'Read complete: '], ['写入失败', 'Write failed'],
+  ['读取失败', 'Read failed'], ['回读值与所选功耗挡位不一致', 'Readback differs from selected power level'],
+  ['功耗字段不匹配', 'Power fields do not match'], ['位域不匹配', 'Bitfields do not match'], ['I2C/REG 错误', 'I2C/REG errors'],
+  ['通过', 'Pass'], ['已接受', 'Accepted'], ['已跳过', 'Skipped'], ['跳过', 'Skip'], ['校验', 'Verify'], ['恢复', 'Restore'],
+  ['读取原值', 'Read original'], ['更新位', 'Update bits'], ['恢复原值', 'Restore original'], ['回读', 'Readback'],
+  ['寄存器操作失败', 'Register operation failed'], ['寄存器计算失败', 'Register calculation failed'], ['功耗寄存器计算失败', 'Power register calculation failed'],
+  ['功耗挡位必须是', 'Power level must be'], ['必须是', 'must be'], ['整数', 'an integer'], ['数值不能为空', 'Value is required'],
+  ['数值格式无效', 'Invalid numeric format'], ['寄存器超出范围', 'Register is out of range'], ['范围格式无效', 'Invalid range format'],
+  ['寄存器列表不能为空', 'Register list is required'], ['寄存器数量不能超过', 'Register count cannot exceed'],
+  ['设备已断开连接', 'Device disconnected'], ['所选设备没有 ASC GATT 服务', 'The selected device does not provide the ASC GATT service'],
+  ['正在打开蓝牙设备选择器', 'Opening Bluetooth device chooser'], ['已选择蓝牙设备', 'Selected Bluetooth device'], ['已连接到', 'Connected to'],
+  ['已读取状态', 'Status read'], ['已读取配置', 'Configuration read'], ['已写入配置', 'Configuration written'],
+  ['SMP OTA 服务已就绪', 'SMP OTA service ready'], ['SMP OTA 不可用', 'SMP OTA unavailable'],
+  ['正在上传', 'Uploading'], ['上传后的镜像状态', 'Image state after upload'], ['正在读取镜像状态', 'Reading image state'],
+  ['正在计算镜像哈希', 'Calculating image hash'], ['正在发送分块', 'Sending chunk'], ['已完成：', 'Complete: '],
+  ['失败：', 'Failed: '], ['已就绪：', 'Ready: '], ['加载失败：', 'Load failed: '], ['错误：', 'Error: '],
+  ['本地文件', 'Local file'], ['本地主机', 'Localhost'], ['可用', 'Available'], ['不可用', 'Unavailable'],
+  ['已打开', 'On'], ['已关闭', 'Off'], ['正在广播', 'Advertising'], ['安全启动', 'Boot safe'], ['已连接空闲', 'Connected idle'],
+  ['已布防', 'Armed'], ['正在采集', 'Capturing'], ['未知状态', 'Unknown status'], ['未知错误', 'Unknown error'],
+  ['内存不足', 'Out of memory'], ['参数无效', 'Invalid parameter'], ['状态无效', 'Invalid state'], ['状态错误', 'Invalid state'],
+  ['不支持', 'Unsupported'], ['超时', 'Timeout'], ['不存在', 'Not found'], ['响应过大', 'Response too large'],
+  ['数据损坏', 'Data corrupted'], ['访问被拒绝', 'Access denied'], ['忙', 'Busy'], ['正常', 'OK'], ['拒绝执行', 'Denied'],
+]);
+
+const languageOriginalText = new WeakMap();
+let activeLanguage = 'en';
+let languageObserver = null;
+
+function normalizeLanguageText(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function englishText(value) {
+  const leading = String(value ?? '').match(/^\s*/)?.[0] || '';
+  const trailing = String(value ?? '').match(/\s*$/)?.[0] || '';
+  const normalized = normalizeLanguageText(value);
+  if (!normalized) return value;
+  if (LANGUAGE_TEXT_EN[normalized]) return `${leading}${LANGUAGE_TEXT_EN[normalized]}${trailing}`;
+
+  let translated = normalized;
+  for (const [source, target] of LANGUAGE_FRAGMENT_EN) {
+    translated = translated.replaceAll(source, target);
+  }
+  return /[\p{Script=Han}]/u.test(translated) ? `${leading}Status updated${trailing}` : `${leading}${translated}${trailing}`;
+}
+
+function textNodeCanBeLocalized(node) {
+  const tagName = node.parentElement?.tagName;
+  return tagName !== 'SCRIPT' && tagName !== 'STYLE';
+}
+
+function localizeTextNode(node) {
+  if (!textNodeCanBeLocalized(node)) return;
+  if (!languageOriginalText.has(node)) languageOriginalText.set(node, node.nodeValue);
+  const original = languageOriginalText.get(node);
+  const next = activeLanguage === 'en' ? englishText(original) : original;
+  if (node.nodeValue !== next) node.nodeValue = next;
+}
+
+function localizeDocumentText() {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) localizeTextNode(node);
+}
+
+function localizeAttributes() {
+  document.documentElement.lang = activeLanguage === 'en' ? 'en' : 'zh-CN';
+  document.title = activeLanguage === 'en' ? 'Sivy ASC CH1 Test Console' : 'Sivy ASC CH1 寄存器控制台';
+  document.querySelector('.brand-logo').alt = activeLanguage === 'en' ? 'Sivy logo' : 'Sivy 标志';
+  $('refreshBtn').title = activeLanguage === 'en' ? 'Refresh status' : '刷新状态';
+  $('ch1VthMv').title = activeLanguage === 'en'
+    ? 'Only 8 mV steps are supported; the page calculates the VTH register code automatically.'
+    : '仅支持 8 mV 整数档；页面会自动换算 VTH 原始码';
+  $('languageLabel').textContent = activeLanguage === 'en' ? 'Language' : '语言';
+  $('languageSelect').setAttribute('aria-label', activeLanguage === 'en' ? 'Language' : '语言');
+  $('languageSelect').options[0].textContent = activeLanguage === 'en' ? 'English' : '英文';
+  $('languageSelect').options[1].textContent = activeLanguage === 'en' ? 'Chinese' : '中文';
+}
+
+function applyLanguage(language, persist = true) {
+  activeLanguage = language === 'zh' ? 'zh' : 'en';
+  localizeAttributes();
+  localizeDocumentText();
+  if (persist) {
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, activeLanguage);
+    } catch (_) {
+      return;
+    }
+  }
+}
+
+function initLanguageControl() {
+  const selector = $('languageSelect');
+  let savedLanguage = 'en';
+  try {
+    savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'en';
+  } catch (_) {
+    savedLanguage = 'en';
+  }
+  selector.value = savedLanguage === 'zh' ? 'zh' : 'en';
+  languageObserver = new MutationObserver((records) => {
+    if (activeLanguage !== 'en') return;
+    for (const record of records) {
+      if (record.type === 'characterData') localizeTextNode(record.target);
+      for (const node of record.addedNodes) {
+        if (node.nodeType === Node.TEXT_NODE) localizeTextNode(node);
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+          while (walker.nextNode()) localizeTextNode(walker.currentNode);
+        }
+      }
+    }
+  });
+  languageObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
+  selector.addEventListener('change', () => applyLanguage(selector.value));
+  applyLanguage(selector.value, false);
+}
+
 function log(message) {
-  const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+  const localizedMessage = activeLanguage === 'en' ? englishText(message) : message;
+  const line = `[${new Date().toLocaleTimeString()}] ${localizedMessage}`;
   logView.textContent = `${line}\n${logView.textContent}`.slice(0, 12000);
 }
 
@@ -2437,6 +2635,7 @@ async function imageState() {
 }
 
 function bindUi() {
+  initLanguageControl();
   ensureProfileEntries();
   updateDeviceFilterUi();
   updateRuntimeEnvironment();
@@ -2539,6 +2738,7 @@ function bindUi() {
   });
   window.addEventListener('resize', drawSamples);
   drawSamples();
+  localizeDocumentText();
 }
 
 async function run(task) {

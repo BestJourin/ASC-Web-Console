@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Cache-Control" content="no-store, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sivy ASC CH1 寄存器控制台</title>
-  <link rel="stylesheet" href="./styles.css?v=20260721-ch1-register-control">
+  <title>Sivy ASC CH1 Test Console</title>
+  <link rel="stylesheet" href="./styles.css?v=20260721-i18n">
 </head>
 <body>
   <main class="shell">
@@ -22,6 +22,13 @@
       <div class="connection">
         <span id="connectionDot" class="dot"></span>
         <span id="connectionText">未连接</span>
+      </div>
+      <div class="language-picker">
+        <label id="languageLabel" for="languageSelect">Language</label>
+        <select id="languageSelect" aria-label="Language">
+          <option value="en">English</option>
+          <option value="zh">Chinese</option>
+        </select>
       </div>
       <div class="device-picker">
         <label>扫描范围
@@ -435,6 +442,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260721-ch1-vth-mv"></script>
+  <script src="./app.js?v=20260721-i18n"></script>
 </body>
 </html>
