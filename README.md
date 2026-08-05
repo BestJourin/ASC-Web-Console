@@ -1,4 +1,4 @@
-# Sivy ASC CH1 Test Console
+# Sivy ASC CH0 Test Console
 
 This repository publishes the Web Bluetooth console for the Sivy-1 ASC
 register bring-up firmware. The live page is available at:
@@ -26,17 +26,17 @@ selected language is stored only in the browser's local storage.
 - Sivy I2C reference testing: a 29-register read-only snapshot, device-side
   PASS/FAIL reporting, CSV export, and the guarded default
   `PW_CTRL[0x38] = 0x36DB` initialization write.
-- Complete writable CH1 controls for `CH1_CTRL[0x16]`, `CH1_FEAT[0x18]`,
-  `CH1_AVG_WORKWIN[0x1A]`, and `CH1_AVG_WAITWIN[0x1C]`. The console calculates
+- Complete writable CH0 controls for `CH0_CTRL[0x0E]`, `CH0_FEAT[0x10]`,
+  `CH0_AVG_WORKWIN[0x12]`, and `CH0_AVG_WAITWIN[0x14]`. The console calculates
   bitfields, writes through `UPDATE_BITS`, decodes readback values, verifies
   writable bits only, and exports CSV results.
 - A linked eight-level `PW_CTRL[0x38]` power controller for `PWR_CTL`,
   `PW_AMPIN`, `PW_PGA`, `PW_SAMPAMP`, and `PW_COMP`, including five-field
   visualization, protected masked writes, and readback verification.
 
-## CH1 VTH Conversion
+## CH0 VTH Conversion
 
-The CH1 VTH control uses millivolts rather than a raw register value. The
+The CH0 VTH control uses millivolts rather than a raw register value. The
 Sivy-1 register table defines `VTH[15:8]` as follows:
 
 ```text

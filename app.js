@@ -1,6 +1,6 @@
 'use strict';
 
-const WEB_CONSOLE_BUILD = '20260721-i18n-file-picker';
+const WEB_CONSOLE_BUILD = '20260805-ch0-i18n';
 
 const UUIDS = {
   ascService: '41534300-7a6d-4ef9-9c6b-5c5940000001',
@@ -86,14 +86,14 @@ const SIVY_REGISTER_EXPECTED = new Map([
   [0x3a, 0x0000],
 ]);
 
-const CH1_REGISTERS = Object.freeze([
-  { key: 'ctrl', name: 'CH1_CTRL', addr: 0x16, mask: 0xff3d, formula: 'CH_EN[0] | PGA_GAIN[5:2] | VTH[15:8]' },
-  { key: 'feature', name: 'CH1_FEAT', addr: 0x18, mask: 0x000f, formula: 'FEAT_SEL[0] | AVG_TRG_EN[1] | AVG_TRG_HA[3:2]' },
-  { key: 'workWindow', name: 'CH1_AVG_WORKWIN', addr: 0x1a, mask: 0x0fff, formula: 'WORK_WINDOW[11:0]' },
-  { key: 'waitWindow', name: 'CH1_AVG_WAITWIN', addr: 0x1c, mask: 0x0fff, formula: 'WAIT_WINDOW[11:0]' },
+const CH0_REGISTERS = Object.freeze([
+  { key: 'ctrl', name: 'CH0_CTRL', addr: 0x0e, mask: 0xff3d, formula: 'CH_EN[0] | PGA_GAIN[5:2] | VTH[15:8]' },
+  { key: 'feature', name: 'CH0_FEAT', addr: 0x10, mask: 0x000f, formula: 'FEAT_SEL[0] | AVG_TRG_EN[1] | AVG_TRG_HA[3:2]' },
+  { key: 'workWindow', name: 'CH0_AVG_WORKWIN', addr: 0x12, mask: 0x0fff, formula: 'WORK_WINDOW[11:0]' },
+  { key: 'waitWindow', name: 'CH0_AVG_WAITWIN', addr: 0x14, mask: 0x0fff, formula: 'WAIT_WINDOW[11:0]' },
 ]);
 
-const CH1_VTH = Object.freeze({
+const CH0_VTH = Object.freeze({
   minimumMillivolts: 8,
   maximumMillivolts: 2048,
   stepMillivolts: 8,
@@ -177,7 +177,7 @@ const state = {
   samples: [],
   ascRegTestRows: [],
   sivyTestRows: [],
-  ch1Rows: [],
+  ch0Rows: [],
   powerRows: [],
   powerReadback: null,
   sivyTestReferenceOutOfSync: false,
@@ -195,9 +195,9 @@ const ctx = canvas.getContext('2d');
 
 const LANGUAGE_STORAGE_KEY = 'sivy-asc-console-language';
 const LANGUAGE_TEXT_EN = Object.freeze({
-  'Sivy ASC CH1 寄存器控制台': 'Sivy ASC CH1 Test Console',
-  'Sivy ASC CH1 位域配置': 'Sivy ASC CH1 Bitfield Configuration',
-  '通道一寄存器控制台': 'Channel 1 Register Console',
+  'Sivy ASC CH0 寄存器控制台': 'Sivy ASC CH0 Test Console',
+  'Sivy ASC CH0 位域配置': 'Sivy ASC CH0 Bitfield Configuration',
+  '通道零寄存器控制台': 'Channel 0 Register Console',
   '未连接': 'Disconnected', '已连接': 'Connected', '扫描范围': 'Scan scope', '全部设备': 'All devices',
   '名称前缀': 'Name prefix', '目标服务': 'Target service', '前缀': 'Prefix', '连接设备': 'Connect device',
   '断开': 'Disconnect', '运行环境': 'Runtime environment', '页面来源': 'Page origin', '安全上下文': 'Secure context',
@@ -226,9 +226,9 @@ const LANGUAGE_TEXT_EN = Object.freeze({
   '请先确认允许写入 PW_CTRL（CPW_CTRL）[0x38] = 0x36DB': 'Confirm that writing PW_CTRL (CPW_CTRL) [0x38] = 0x36DB is allowed first.',
   '执行选定的初始化写入': 'Run selected initialization write', '等待固件测试结果': 'Waiting for firmware test results',
   '序号': 'Index', '名称': 'Name', '结果': 'Result', '匹配/不匹配/I2C 错误': 'Match / mismatch / I2C errors',
-  'CH1 寄存器配置': 'CH1 Register Configuration', '读取 CH1 并反解': 'Read and decode CH1',
+  'CH0 寄存器配置': 'CH0 Register Configuration', '读取 CH0 并反解': 'Read and decode CH0',
   '写入并回读校验': 'Write and verify readback', '清空结果': 'Clear results',
-  '控件只覆盖 CH1 的可写位：CH1_CTRL[0x16]、CH1_FEAT[0x18]、CH1_AVG_WORKWIN[0x1A]、CH1_AVG_WAITWIN[0x1C]。 页面实时计算位域值，并使用掩码更新保留位不变。': 'Controls cover only CH1 writable bits: CH1_CTRL[0x16], CH1_FEAT[0x18], CH1_AVG_WORKWIN[0x1A], and CH1_AVG_WAITWIN[0x1C]. Values are calculated live and masked updates preserve reserved bits.',
+  '控件只覆盖 CH0 的可写位：CH0_CTRL[0x0E]、CH0_FEAT[0x10]、CH0_AVG_WORKWIN[0x12]、CH0_AVG_WAITWIN[0x14]。 页面实时计算位域值，并使用掩码更新保留位不变。': 'Controls cover only CH0 writable bits: CH0_CTRL[0x0E], CH0_FEAT[0x10], CH0_AVG_WORKWIN[0x12], and CH0_AVG_WAITWIN[0x14]. Values are calculated live and masked updates preserve reserved bits.',
   '阈值电压 VTH（mV，bits 15:8）': 'VTH threshold voltage (mV, bits 15:8)',
   '仅支持 8 mV 整数档；页面会自动换算 VTH 原始码': 'Only 8 mV steps are supported; the page calculates the VTH register code automatically.',
   '特征模式（FEAT_SEL，bit 0）': 'Feature mode (FEAT_SEL, bit 0)', '脉冲时间戳': 'Pulse timestamp',
@@ -236,7 +236,7 @@ const LANGUAGE_TEXT_EN = Object.freeze({
   '均值触发边沿（AVG_TRG_HA，bits 3:2）': 'Average trigger edge (AVG_TRG_HA, bits 3:2)',
   '上升沿': 'Rising edge', '下降沿': 'Falling edge', '上升沿或下降沿': 'Rising or falling edge',
   '工作窗口（bits 11:0）': 'Work window (bits 11:0)', '等待窗口（bits 11:0）': 'Wait window (bits 11:0)',
-  '读写前打开 ASC 外部电源': 'Power ASC externally before read/write', '确认写入 CH1 可写位': 'Confirm CH1 writable-bit write',
+  '读写前打开 ASC 外部电源': 'Power ASC externally before read/write', '确认写入 CH0 可写位': 'Confirm CH0 writable-bit write',
   '可写掩码': 'Writable mask', '计算值': 'Calculated value', '位域计算': 'Bitfield calculation',
   '调整控件后会实时显示计算寄存器值；写入前需要勾选确认。': 'Adjust controls to calculate register values live; confirmation is required before writing.',
   'ASC 功耗控制器': 'ASC Power Controller', '读取并反解': 'Read and decode', '应用挡位并回读': 'Apply level and read back',
@@ -264,9 +264,9 @@ const LANGUAGE_FRAGMENT_EN = Object.freeze([
   ['等待固件测试结果', 'Waiting for firmware test results'], ['正在执行测试并回传结果', 'The firmware is running the test and returning results'],
   ['初始化写入', 'Initialization write'], ['数值不匹配', 'Value mismatch'], ['已读取并等待反解', 'Read; waiting for decode'],
   ['已读取并反解到配置控件', 'Read and decoded into controls'], ['已读取并反解到滑块和五路功耗可视化', 'Read and decoded into slider and five-field power visualization'],
-  ['正在读取 CH1 寄存器并反解位域', 'Reading CH1 registers and decoding bitfields'], ['正在按位域掩码写入 CH1 寄存器', 'Writing CH1 registers with bitfield masks'],
+  ['正在读取 CH0 寄存器并反解位域', 'Reading CH0 registers and decoding bitfields'], ['正在按位域掩码写入 CH0 寄存器', 'Writing CH0 registers with bitfield masks'],
   ['正在读取 PW_CTRL 并反解五个功耗字段', 'Reading PW_CTRL and decoding five power fields'], ['正在将五个功耗字段同步写入', 'Writing the five power fields in sync'],
-  ['写入后的四个 CH1 寄存器均已回读校验通过。', 'All four CH1 registers passed readback verification.'],
+  ['写入后的四个 CH0 寄存器均已回读校验通过。', 'All four CH0 registers passed readback verification.'],
   ['PW_CTRL 的五个功耗字段已写入并回读校验通过。', 'All five PW_CTRL power fields passed write and readback verification.'],
   ['REG_REQ 读取失败', 'REG_REQ read failed'], ['REG_REQ 更新失败', 'REG_REQ update failed'], ['等待 REG_RSP 响应超时', 'Timed out waiting for REG_RSP'],
   ['请先确认允许写入', 'Confirm that writing is allowed first'], ['写入前需要勾选确认', 'confirmation is required before writing'],
@@ -340,10 +340,10 @@ function localizeDocumentText() {
 
 function localizeAttributes() {
   document.documentElement.lang = activeLanguage === 'en' ? 'en' : 'zh-CN';
-  document.title = activeLanguage === 'en' ? 'Sivy ASC CH1 Test Console' : 'Sivy ASC CH1 寄存器控制台';
+  document.title = activeLanguage === 'en' ? 'Sivy ASC CH0 Test Console' : 'Sivy ASC CH0 寄存器控制台';
   document.querySelector('.brand-logo').alt = activeLanguage === 'en' ? 'Sivy logo' : 'Sivy 标志';
   $('refreshBtn').title = activeLanguage === 'en' ? 'Refresh status' : '刷新状态';
-  $('ch1VthMv').title = activeLanguage === 'en'
+  $('ch0VthMv').title = activeLanguage === 'en'
     ? 'Only 8 mV steps are supported; the page calculates the VTH register code automatically.'
     : '仅支持 8 mV 整数档；页面会自动换算 VTH 原始码';
   $('languageLabel').textContent = activeLanguage === 'en' ? 'Language' : '语言';
@@ -1295,7 +1295,7 @@ async function regCommand(op) {
   return rsp;
 }
 
-function ch1ConfigNumber(id, maximum) {
+function ch0ConfigNumber(id, maximum) {
   const value = parseNumber($(id).value);
   if (!Number.isInteger(value) || value < 0 || value > maximum) {
     throw new Error(`${id} 必须是 0 到 ${maximum} 的整数`);
@@ -1303,72 +1303,72 @@ function ch1ConfigNumber(id, maximum) {
   return value;
 }
 
-function ch1VthCodeFromMillivolts() {
-  const millivolts = parseNumber($('ch1VthMv').value);
-  const { minimumMillivolts, maximumMillivolts, stepMillivolts } = CH1_VTH;
+function ch0VthCodeFromMillivolts() {
+  const millivolts = parseNumber($('ch0VthMv').value);
+  const { minimumMillivolts, maximumMillivolts, stepMillivolts } = CH0_VTH;
   if (!Number.isInteger(millivolts)
       || millivolts < minimumMillivolts
       || millivolts > maximumMillivolts
       || millivolts % stepMillivolts !== 0) {
-    throw new Error(`ch1VthMv 必须是 ${minimumMillivolts} 到 ${maximumMillivolts} mV 之间、步进 ${stepMillivolts} mV 的整数`);
+    throw new Error(`ch0VthMv 必须是 ${minimumMillivolts} 到 ${maximumMillivolts} mV 之间、步进 ${stepMillivolts} mV 的整数`);
   }
   return (millivolts / stepMillivolts) - 1;
 }
 
-function ch1VthMillivoltsFromCode(code) {
-  return (code + 1) * CH1_VTH.stepMillivolts;
+function ch0VthMillivoltsFromCode(code) {
+  return (code + 1) * CH0_VTH.stepMillivolts;
 }
 
-function getCh1RegisterPlan() {
-  const channelEnabled = $('ch1Enable').checked ? 1 : 0;
-  const pgaGain = ch1ConfigNumber('ch1PgaGain', 15);
-  const thresholdMillivolts = ch1ConfigNumber('ch1VthMv', CH1_VTH.maximumMillivolts);
-  const threshold = ch1VthCodeFromMillivolts();
-  const featureSelect = ch1ConfigNumber('ch1FeatSel', 1);
-  const averageTriggerEnabled = $('ch1AvgTriggerEnable').checked ? 1 : 0;
-  const averageTriggerEdge = ch1ConfigNumber('ch1AvgTriggerEdge', 2);
-  const workWindow = ch1ConfigNumber('ch1WorkWindow', 0x0fff);
-  const waitWindow = ch1ConfigNumber('ch1WaitWindow', 0x0fff);
+function getCh0RegisterPlan() {
+  const channelEnabled = $('ch0Enable').checked ? 1 : 0;
+  const pgaGain = ch0ConfigNumber('ch0PgaGain', 15);
+  const thresholdMillivolts = ch0ConfigNumber('ch0VthMv', CH0_VTH.maximumMillivolts);
+  const threshold = ch0VthCodeFromMillivolts();
+  const featureSelect = ch0ConfigNumber('ch0FeatSel', 1);
+  const averageTriggerEnabled = $('ch0AvgTriggerEnable').checked ? 1 : 0;
+  const averageTriggerEdge = ch0ConfigNumber('ch0AvgTriggerEdge', 2);
+  const workWindow = ch0ConfigNumber('ch0WorkWindow', 0x0fff);
+  const waitWindow = ch0ConfigNumber('ch0WaitWindow', 0x0fff);
 
   return [
     {
-      ...CH1_REGISTERS[0],
+      ...CH0_REGISTERS[0],
       value: channelEnabled | (pgaGain << 2) | (threshold << 8),
       detail: `CH_EN=${channelEnabled}, PGA_GAIN=${hex(pgaGain, 1)}, VTH=${thresholdMillivolts} mV (${hex(threshold, 2)})`,
     },
     {
-      ...CH1_REGISTERS[1],
+      ...CH0_REGISTERS[1],
       value: featureSelect | (averageTriggerEnabled << 1) | (averageTriggerEdge << 2),
       detail: `FEAT_SEL=${featureSelect}, AVG_TRG_EN=${averageTriggerEnabled}, AVG_TRG_HA=${averageTriggerEdge}`,
     },
     {
-      ...CH1_REGISTERS[2],
+      ...CH0_REGISTERS[2],
       value: workWindow,
       detail: `WORK_WINDOW=${workWindow}`,
     },
     {
-      ...CH1_REGISTERS[3],
+      ...CH0_REGISTERS[3],
       value: waitWindow,
       detail: `WAIT_WINDOW=${waitWindow}`,
     },
   ];
 }
 
-function setCh1Summary(text, level = 'idle') {
-  const summary = $('ch1Summary');
+function setCh0Summary(text, level = 'idle') {
+  const summary = $('ch0Summary');
   summary.textContent = text;
   summary.classList.remove('pass', 'fail', 'running', 'idle');
   summary.classList.add(level);
 }
 
-function renderCh1RegisterPlan() {
-  const tbody = $('ch1PreviewRows');
-  const warning = $('ch1DecodeWarning');
+function renderCh0RegisterPlan() {
+  const tbody = $('ch0PreviewRows');
+  const warning = $('ch0DecodeWarning');
   tbody.textContent = '';
   warning.textContent = '';
 
   try {
-    for (const entry of getCh1RegisterPlan()) {
+    for (const entry of getCh0RegisterPlan()) {
       const row = document.createElement('tr');
       const cells = [entry.name, hex(entry.addr, 2), hex(entry.mask, 4), hex(entry.value, 4), entry.detail];
       for (const value of cells) {
@@ -1383,14 +1383,14 @@ function renderCh1RegisterPlan() {
   }
 }
 
-function clearCh1Results() {
-  state.ch1Rows = [];
-  $('ch1ResultRows').textContent = '';
-  setCh1Summary('调整控件后会实时显示计算寄存器值；写入前需要勾选确认。');
+function clearCh0Results() {
+  state.ch0Rows = [];
+  $('ch0ResultRows').textContent = '';
+  setCh0Summary('调整控件后会实时显示计算寄存器值；写入前需要勾选确认。');
 }
 
-function appendCh1Result(row) {
-  const tbody = $('ch1ResultRows');
+function appendCh0Result(row) {
+  const tbody = $('ch0ResultRows');
   const tr = document.createElement('tr');
   const cells = [row.step, row.name, row.addr, row.mask, row.expected, row.actual, row.status, row.note];
 
@@ -1401,51 +1401,51 @@ function appendCh1Result(row) {
   }
   tr.children[6].className = row.pass ? 'pass' : 'fail';
   tbody.appendChild(tr);
-  state.ch1Rows.push({ time: new Date().toISOString(), ...row });
+  state.ch0Rows.push({ time: new Date().toISOString(), ...row });
 }
 
-async function maybePowerOnForCh1() {
-  if ($('ch1PowerOn').checked) {
+async function maybePowerOnForCh0() {
+  if ($('ch0PowerOn').checked) {
     await ctrl(CTRL.POWER_ON);
   }
 }
 
-function applyCh1Readback(readbacks) {
-  const ctrlValue = readbacks.get(0x16);
-  const featureValue = readbacks.get(0x18);
-  const workWindow = readbacks.get(0x1a);
-  const waitWindow = readbacks.get(0x1c);
+function applyCh0Readback(readbacks) {
+  const ctrlValue = readbacks.get(0x0e);
+  const featureValue = readbacks.get(0x10);
+  const workWindow = readbacks.get(0x12);
+  const waitWindow = readbacks.get(0x14);
   const triggerEdge = (featureValue >> 2) & 0x03;
 
-  $('ch1Enable').checked = (ctrlValue & 0x0001) !== 0;
-  $('ch1PgaGain').value = String((ctrlValue >> 2) & 0x0f);
-  $('ch1VthMv').value = String(ch1VthMillivoltsFromCode((ctrlValue >> 8) & 0xff));
-  $('ch1FeatSel').value = String(featureValue & 0x01);
-  $('ch1AvgTriggerEnable').checked = (featureValue & 0x02) !== 0;
-  $('ch1WorkWindow').value = String(workWindow & 0x0fff);
-  $('ch1WaitWindow').value = String(waitWindow & 0x0fff);
+  $('ch0Enable').checked = (ctrlValue & 0x0001) !== 0;
+  $('ch0PgaGain').value = String((ctrlValue >> 2) & 0x0f);
+  $('ch0VthMv').value = String(ch0VthMillivoltsFromCode((ctrlValue >> 8) & 0xff));
+  $('ch0FeatSel').value = String(featureValue & 0x01);
+  $('ch0AvgTriggerEnable').checked = (featureValue & 0x02) !== 0;
+  $('ch0WorkWindow').value = String(workWindow & 0x0fff);
+  $('ch0WaitWindow').value = String(waitWindow & 0x0fff);
 
   if (triggerEdge <= 2) {
-    $('ch1AvgTriggerEdge').value = String(triggerEdge);
-    $('ch1DecodeWarning').textContent = '';
+    $('ch0AvgTriggerEdge').value = String(triggerEdge);
+    $('ch0DecodeWarning').textContent = '';
   } else {
-    $('ch1AvgTriggerEdge').value = '0';
-    $('ch1DecodeWarning').textContent = 'CH1_FEAT[3:2] 读回保留值 0b11；控件保留为上升沿，写入前请确认芯片状态。';
+    $('ch0AvgTriggerEdge').value = '0';
+    $('ch0DecodeWarning').textContent = 'CH0_FEAT[3:2] 读回保留值 0b11；控件保留为上升沿，写入前请确认芯片状态。';
   }
-  renderCh1RegisterPlan();
+  renderCh0RegisterPlan();
 }
 
-async function readCh1Registers({ clear = true, expectedPlan = null, skipPowerOn = false } = {}) {
-  if (clear) clearCh1Results();
-  if (!skipPowerOn) await maybePowerOnForCh1();
+async function readCh0Registers({ clear = true, expectedPlan = null, skipPowerOn = false } = {}) {
+  if (clear) clearCh0Results();
+  if (!skipPowerOn) await maybePowerOnForCh0();
 
-  setCh1Summary('正在读取 CH1 寄存器并反解位域…', 'running');
+  setCh0Summary('正在读取 CH0 寄存器并反解位域…', 'running');
   const expectedByAddress = new Map((expectedPlan || []).map((entry) => [entry.addr, entry]));
   const readbacks = new Map();
   let ioErrors = 0;
   let mismatches = 0;
 
-  for (const entry of CH1_REGISTERS) {
+  for (const entry of CH0_REGISTERS) {
     const response = await sendRegReq({
       target: 1,
       op: REG.READ,
@@ -1458,7 +1458,7 @@ async function readCh1Registers({ clear = true, expectedPlan = null, skipPowerOn
 
     if (response.status !== REG.OK) {
       ioErrors += 1;
-      appendCh1Result({
+      appendCh0Result({
         step: '读取',
         name: entry.name,
         addr: hex(entry.addr, 2),
@@ -1475,7 +1475,7 @@ async function readCh1Registers({ clear = true, expectedPlan = null, skipPowerOn
     readbacks.set(entry.addr, response.value);
     const matches = !expected || ((response.value & entry.mask) === (expected.value & entry.mask));
     if (!matches) mismatches += 1;
-    appendCh1Result({
+    appendCh0Result({
       step: '读取',
       name: entry.name,
       addr: hex(entry.addr, 2),
@@ -1488,29 +1488,29 @@ async function readCh1Registers({ clear = true, expectedPlan = null, skipPowerOn
     });
   }
 
-  if (readbacks.size === CH1_REGISTERS.length) applyCh1Readback(readbacks);
+  if (readbacks.size === CH0_REGISTERS.length) applyCh0Readback(readbacks);
 
   if (ioErrors > 0) {
-    setCh1Summary(`读取完成：${ioErrors} 个 I2C/REG 错误。`, 'fail');
+    setCh0Summary(`读取完成：${ioErrors} 个 I2C/REG 错误。`, 'fail');
   } else if (mismatches > 0) {
-    setCh1Summary(`读取完成：${mismatches} 个寄存器的可写位与计算值不匹配。`, 'fail');
+    setCh0Summary(`读取完成：${mismatches} 个寄存器的可写位与计算值不匹配。`, 'fail');
   } else if (expectedPlan) {
-    setCh1Summary('写入后的四个 CH1 寄存器均已回读校验通过。', 'pass');
+    setCh0Summary('写入后的四个 CH0 寄存器均已回读校验通过。', 'pass');
   } else {
-    setCh1Summary('已读取四个 CH1 寄存器，并已反解到配置控件。', 'pass');
+    setCh0Summary('已读取四个 CH0 寄存器，并已反解到配置控件。', 'pass');
   }
   return { readbacks, ioErrors, mismatches };
 }
 
-async function writeCh1Registers() {
-  if (!$('ch1WriteConfirm').checked) {
-    throw new Error('请先确认允许写入 CH1 的可写位');
+async function writeCh0Registers() {
+  if (!$('ch0WriteConfirm').checked) {
+    throw new Error('请先确认允许写入 CH0 的可写位');
   }
 
-  const plan = getCh1RegisterPlan();
-  clearCh1Results();
-  await maybePowerOnForCh1();
-  setCh1Summary('正在按位域掩码写入 CH1 寄存器…', 'running');
+  const plan = getCh0RegisterPlan();
+  clearCh0Results();
+  await maybePowerOnForCh0();
+  setCh0Summary('正在按位域掩码写入 CH0 寄存器…', 'running');
 
   for (const entry of plan) {
     const response = await sendRegReq({
@@ -1522,7 +1522,7 @@ async function writeCh1Registers() {
       mask: entry.mask,
     });
     const accepted = response.status === REG.OK;
-    appendCh1Result({
+    appendCh0Result({
       step: '掩码写入',
       name: entry.name,
       addr: hex(entry.addr, 2),
@@ -1534,17 +1534,17 @@ async function writeCh1Registers() {
       pass: accepted,
     });
     if (!accepted) {
-      setCh1Summary(`${entry.name} 写入失败，未继续后续寄存器。`, 'fail');
+      setCh0Summary(`${entry.name} 写入失败，未继续后续寄存器。`, 'fail');
       return;
     }
   }
 
-  await readCh1Registers({ clear: false, expectedPlan: plan, skipPowerOn: true });
+  await readCh0Registers({ clear: false, expectedPlan: plan, skipPowerOn: true });
 }
 
-function exportCh1Results() {
-  if (state.ch1Rows.length === 0) {
-    log('CH1 CSV 未导出：没有读写结果');
+function exportCh0Results() {
+  if (state.ch0Rows.length === 0) {
+    log('CH0 CSV 未导出：没有读写结果');
     return;
   }
   const columns = [
@@ -1554,16 +1554,16 @@ function exportCh1Results() {
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
   const csv = [
     columns.map(([, label]) => label).join(','),
-    ...state.ch1Rows.map((row) => columns.map(([key]) => escape(row[key])).join(',')),
+    ...state.ch0Rows.map((row) => columns.map(([key]) => escape(row[key])).join(',')),
   ].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `sivy_ch1_register_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+  link.download = `sivy_ch0_register_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  log(`CH1 读写 CSV 已导出：${state.ch1Rows.length} 行`);
+  log(`CH0 读写 CSV 已导出：${state.ch0Rows.length} 行`);
 }
 
 function powerLevelCode() {
@@ -2686,19 +2686,19 @@ function bindUi() {
   $('sivyTestInitWriteBtn').addEventListener('click', () => run(runSivySelectedInitWrite));
   $('sivyTestClearBtn').addEventListener('click', clearSivyTestResults);
   $('sivyTestExportBtn').addEventListener('click', exportSivyTestCsv);
-  const ch1ControlIds = [
-    'ch1Enable', 'ch1PgaGain', 'ch1VthMv', 'ch1FeatSel', 'ch1AvgTriggerEnable',
-    'ch1AvgTriggerEdge', 'ch1WorkWindow', 'ch1WaitWindow',
+  const ch0ControlIds = [
+    'ch0Enable', 'ch0PgaGain', 'ch0VthMv', 'ch0FeatSel', 'ch0AvgTriggerEnable',
+    'ch0AvgTriggerEdge', 'ch0WorkWindow', 'ch0WaitWindow',
   ];
-  for (const id of ch1ControlIds) {
-    $(id).addEventListener('input', renderCh1RegisterPlan);
-    $(id).addEventListener('change', renderCh1RegisterPlan);
+  for (const id of ch0ControlIds) {
+    $(id).addEventListener('input', renderCh0RegisterPlan);
+    $(id).addEventListener('change', renderCh0RegisterPlan);
   }
-  $('ch1ReadBtn').addEventListener('click', () => run(() => readCh1Registers()));
-  $('ch1WriteBtn').addEventListener('click', () => run(writeCh1Registers));
-  $('ch1ClearBtn').addEventListener('click', clearCh1Results);
-  $('ch1ExportBtn').addEventListener('click', exportCh1Results);
-  renderCh1RegisterPlan();
+  $('ch0ReadBtn').addEventListener('click', () => run(() => readCh0Registers()));
+  $('ch0WriteBtn').addEventListener('click', () => run(writeCh0Registers));
+  $('ch0ClearBtn').addEventListener('click', clearCh0Results);
+  $('ch0ExportBtn').addEventListener('click', exportCh0Results);
+  renderCh0RegisterPlan();
   $('powerLevel').addEventListener('input', () => {
     state.powerReadback = null;
     $('powerDecodeWarning').textContent = '';

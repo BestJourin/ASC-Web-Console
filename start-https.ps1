@@ -76,7 +76,7 @@ prompt = no
 x509_extensions = v3_ca
 
 [req_distinguished_name]
-CN = Sivy ASC CH1 Local CA
+CN = Sivy ASC CH0 Local CA
 
 [v3_ca]
 basicConstraints = critical, CA:TRUE

@@ -6,8 +6,8 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sivy ASC CH1 Test Console</title>
-  <link rel="stylesheet" href="./styles.css?v=20260721-i18n">
+  <title>Sivy ASC CH0 Test Console</title>
+  <link rel="stylesheet" href="./styles.css?v=20260805-ch0-i18n">
 </head>
 <body>
   <main class="shell">
@@ -15,8 +15,8 @@
       <div class="brand-lockup">
         <img class="brand-logo" src="./assets/sivy_logo.svg?v=20260629-logo" alt="Sivy 标志">
         <div>
-          <p class="eyebrow">Sivy ASC CH1 位域配置</p>
-          <h1>通道一寄存器控制台</h1>
+          <p class="eyebrow">Sivy ASC CH0 位域配置</p>
+          <h1>通道零寄存器控制台</h1>
         </div>
       </div>
       <div class="connection">
@@ -274,24 +274,24 @@
         </div>
       </section>
 
-      <section class="panel ch1-control-panel">
+      <section class="panel ch0-control-panel">
         <div class="panel-head">
-          <h2>CH1 寄存器配置</h2>
+          <h2>CH0 寄存器配置</h2>
           <div class="sample-actions">
-            <button id="ch1ReadBtn" class="primary">读取 CH1 并反解</button>
-            <button id="ch1WriteBtn">写入并回读校验</button>
-            <button id="ch1ExportBtn">导出 CSV</button>
-            <button id="ch1ClearBtn">清空结果</button>
+            <button id="ch0ReadBtn" class="primary">读取 CH0 并反解</button>
+            <button id="ch0WriteBtn">写入并回读校验</button>
+            <button id="ch0ExportBtn">导出 CSV</button>
+            <button id="ch0ClearBtn">清空结果</button>
           </div>
         </div>
-        <p class="ch1-control-description">
-          控件只覆盖 CH1 的可写位：CH1_CTRL[0x16]、CH1_FEAT[0x18]、CH1_AVG_WORKWIN[0x1A]、CH1_AVG_WAITWIN[0x1C]。
+        <p class="ch0-control-description">
+          控件只覆盖 CH0 的可写位：CH0_CTRL[0x0E]、CH0_FEAT[0x10]、CH0_AVG_WORKWIN[0x12]、CH0_AVG_WAITWIN[0x14]。
           页面实时计算位域值，并使用掩码更新保留位不变。
         </p>
-        <div class="ch1-config-grid">
-          <label class="toggle"><span>CH_EN（bit 0）</span><input id="ch1Enable" type="checkbox" checked></label>
+        <div class="ch0-config-grid">
+          <label class="toggle"><span>CH_EN（bit 0）</span><input id="ch0Enable" type="checkbox" checked></label>
           <label>PGA_GAIN（bits 5:2）
-            <select id="ch1PgaGain">
+            <select id="ch0PgaGain">
               <option value="0">0x0：0.5x</option><option value="1">0x1：0.667x</option>
               <option value="2">0x2：0.8x</option><option value="3" selected>0x3：1x（默认）</option>
               <option value="4">0x4：1.333x</option><option value="5">0x5：2x</option>
@@ -302,33 +302,33 @@
               <option value="14">0xE：1.333x（低噪声档）</option><option value="15">0xF：2x（低噪声档）</option>
             </select>
           </label>
-          <label>阈值电压 VTH（mV，bits 15:8）<input id="ch1VthMv" type="number" min="8" max="2048" step="8" value="8" title="仅支持 8 mV 整数档；页面会自动换算 VTH 原始码"></label>
+          <label>阈值电压 VTH（mV，bits 15:8）<input id="ch0VthMv" type="number" min="8" max="2048" step="8" value="8" title="仅支持 8 mV 整数档；页面会自动换算 VTH 原始码"></label>
           <label>特征模式（FEAT_SEL，bit 0）
-            <select id="ch1FeatSel"><option value="0" selected>脉冲时间戳</option><option value="1">窗口内周期均值</option></select>
+            <select id="ch0FeatSel"><option value="0" selected>脉冲时间戳</option><option value="1">窗口内周期均值</option></select>
           </label>
-          <label class="toggle"><span>均值触发（AVG_TRG_EN，bit 1）</span><input id="ch1AvgTriggerEnable" type="checkbox"></label>
+          <label class="toggle"><span>均值触发（AVG_TRG_EN，bit 1）</span><input id="ch0AvgTriggerEnable" type="checkbox"></label>
           <label>均值触发边沿（AVG_TRG_HA，bits 3:2）
-            <select id="ch1AvgTriggerEdge"><option value="0" selected>上升沿</option><option value="1">下降沿</option><option value="2">上升沿或下降沿</option></select>
+            <select id="ch0AvgTriggerEdge"><option value="0" selected>上升沿</option><option value="1">下降沿</option><option value="2">上升沿或下降沿</option></select>
           </label>
-          <label>工作窗口（bits 11:0）<input id="ch1WorkWindow" type="number" min="0" max="4095" step="1" value="0"></label>
-          <label>等待窗口（bits 11:0）<input id="ch1WaitWindow" type="number" min="0" max="4095" step="1" value="0"></label>
+          <label>工作窗口（bits 11:0）<input id="ch0WorkWindow" type="number" min="0" max="4095" step="1" value="0"></label>
+          <label>等待窗口（bits 11:0）<input id="ch0WaitWindow" type="number" min="0" max="4095" step="1" value="0"></label>
         </div>
-        <div class="ch1-write-options">
-          <label class="toggle compact-toggle"><span>读写前打开 ASC 外部电源</span><input id="ch1PowerOn" type="checkbox" checked></label>
-          <label class="toggle compact-toggle"><span>确认写入 CH1 可写位</span><input id="ch1WriteConfirm" type="checkbox"></label>
+        <div class="ch0-write-options">
+          <label class="toggle compact-toggle"><span>读写前打开 ASC 外部电源</span><input id="ch0PowerOn" type="checkbox" checked></label>
+          <label class="toggle compact-toggle"><span>确认写入 CH0 可写位</span><input id="ch0WriteConfirm" type="checkbox"></label>
         </div>
-        <p id="ch1DecodeWarning" class="ch1-decode-warning"></p>
+        <p id="ch0DecodeWarning" class="ch0-decode-warning"></p>
         <div class="table-wrap">
-          <table class="test-table ch1-preview-table">
+          <table class="test-table ch0-preview-table">
             <thead><tr><th>寄存器</th><th>地址</th><th>可写掩码</th><th>计算值</th><th>位域计算</th></tr></thead>
-            <tbody id="ch1PreviewRows"></tbody>
+            <tbody id="ch0PreviewRows"></tbody>
           </table>
         </div>
-        <div id="ch1Summary" class="ch1-summary idle">调整控件后会实时显示计算寄存器值；写入前需要勾选确认。</div>
+        <div id="ch0Summary" class="ch0-summary idle">调整控件后会实时显示计算寄存器值；写入前需要勾选确认。</div>
         <div class="table-wrap">
           <table class="test-table">
             <thead><tr><th>步骤</th><th>寄存器</th><th>地址</th><th>掩码</th><th>期望值</th><th>实际值</th><th>结果</th><th>说明</th></tr></thead>
-            <tbody id="ch1ResultRows"></tbody>
+            <tbody id="ch0ResultRows"></tbody>
           </table>
         </div>
       </section>
@@ -445,6 +445,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260721-i18n-file-picker"></script>
+  <script src="./app.js?v=20260805-ch0-i18n"></script>
 </body>
 </html>
