@@ -90,10 +90,19 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.topbar > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
+}
+
+.brand-lockup > div {
   min-width: 0;
 }
 
@@ -127,6 +136,7 @@ h1 {
   font-size: clamp(28px, 2.4vw, 36px);
   line-height: 1.05;
   font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 h2 {
@@ -278,6 +288,7 @@ h2 {
 }
 
 .panel {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
@@ -421,7 +432,11 @@ label {
   grid-column: 1 / -1;
 }
 
-.ch0-control-panel {
+.channel-control-panel {
+  grid-column: 1 / -1;
+}
+
+.frequency-control-panel {
   grid-column: 1 / -1;
 }
 
@@ -429,38 +444,222 @@ label {
   grid-column: 1 / -1;
 }
 
-.ch0-control-description {
+.channel-control-description {
   margin: -4px 0 16px;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.55;
 }
 
-.ch0-config-grid {
+.channel-control-list {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.channel-control-block {
+  border-top: 1px solid var(--line);
+}
+
+.channel-control-block:first-child {
+  border-top: 0;
+}
+
+.channel-block-summary {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  min-height: 54px;
+  padding: 10px 4px;
+  cursor: pointer;
+}
+
+.channel-block-summary::marker {
+  color: var(--blue);
+}
+
+.channel-block-summary strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.channel-block-summary code {
+  color: var(--muted);
+  font: 12px/1.45 "SF Mono", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.channel-block-content {
+  padding: 0 0 18px;
+}
+
+.channel-actions {
+  justify-content: flex-start;
+  margin-bottom: 14px;
+}
+
+.channel-config-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(180px, 1fr));
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.58);
 }
 
-.ch0-config-grid label {
+.channel-config-grid label {
   min-width: 0;
 }
 
-.ch0-write-options {
+.channel-config-grid select,
+.channel-config-grid input[type="number"] {
+  width: 100%;
+  height: 40px;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  background: #fff;
+}
+
+.channel-config-grid .toggle {
+  height: 62px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.channel-write-options {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   margin: 14px 0;
 }
 
-.ch0-decode-warning {
+.channel-decode-warning {
   min-height: 20px;
   margin: 0 0 12px;
   color: var(--red);
+  font-size: 13px;
+}
+
+.frequency-control-description {
+  margin: -4px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.frequency-groups {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.frequency-group {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.frequency-group:first-child {
+  border-top: 0;
+}
+
+.frequency-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.frequency-group-head h3 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.frequency-group-head code,
+.frequency-formula-preview {
+  color: var(--muted);
+  font: 12px/1.45 "SF Mono", Consolas, monospace;
+}
+
+.frequency-control-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.frequency-control-grid-compact {
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+}
+
+.frequency-control-grid label {
+  min-width: 0;
+}
+
+.frequency-control-grid select,
+.frequency-control-grid input[type="number"] {
+  width: 100%;
+  height: 40px;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  background: #fff;
+}
+
+.frequency-control-grid .toggle {
+  height: 62px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.frequency-control-grid small {
+  display: block;
+  min-height: 17px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.frequency-formula-preview {
+  min-height: 18px;
+  margin: 12px 0 0;
+}
+
+.frequency-pll-output {
+  display: block;
+  min-height: 42px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--blue);
+  background: rgba(0, 113, 227, 0.08);
+  color: var(--blue);
+  font: 700 14px/1.45 "SF Mono", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.frequency-write-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.frequency-decode-warning {
+  min-height: 20px;
+  margin: 0 0 12px;
+  color: var(--amber);
   font-size: 13px;
 }
 
@@ -472,28 +671,7 @@ label {
 }
 
 .power-slider-card {
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.58);
-}
-
-.power-slider-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.power-level-label {
-  color: var(--blue);
-  font: 600 14px/1.4 "SF Mono", Consolas, monospace;
-}
-
-.power-level-slider {
-  width: 100%;
-  margin: 16px 0 8px;
-  accent-color: var(--blue);
+  padding: 8px 154px 0 180px;
 }
 
 .power-scale {
@@ -507,67 +685,62 @@ label {
 
 .power-register-preview {
   min-height: 20px;
-  margin: 14px 0 0;
+  margin: 10px -154px 0 -180px;
   color: var(--muted);
   font: 12px/1.45 "SF Mono", Consolas, monospace;
 }
 
-.power-stage-grid {
+.power-field-list {
   display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+  gap: 8px;
 }
 
-.power-stage {
-  --power-level: 50%;
-  position: relative;
+.power-field-row {
+  min-width: 0;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 3px 10px;
-  min-height: 90px;
-  padding: 12px;
-  overflow: hidden;
+  grid-template-columns: 160px minmax(240px, 1fr) 180px 62px;
+  gap: 14px;
+  align-items: center;
+  min-height: 66px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: linear-gradient(90deg, rgba(0, 113, 227, 0.16) 0 var(--power-level), rgba(255, 255, 255, 0.58) var(--power-level) 100%);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
 }
 
-.power-stage strong,
-.power-stage span,
-.power-stage output,
-.power-stage code {
-  position: relative;
-  z-index: 1;
+.power-field-row input[type="range"] {
+  min-width: 0;
+  width: 100%;
+  accent-color: var(--blue);
 }
 
-.power-stage strong,
-.power-stage span {
+.power-field-name strong,
+.power-field-name span {
   display: block;
 }
 
-.power-stage strong {
+.power-field-name strong {
   color: var(--text);
   font-size: 13px;
 }
 
-.power-stage span {
+.power-field-name span {
   margin-top: 4px;
   color: var(--muted);
   font-size: 11px;
 }
 
-.power-stage output {
-  align-self: center;
+.power-field-row output {
+  min-width: 0;
   color: var(--blue);
-  font-size: 18px;
+  font: 700 13px/1.4 "SF Mono", Consolas, monospace;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
-.power-stage code {
-  grid-column: 1 / -1;
+.power-field-row code {
   color: var(--muted);
-  font: 11px/1.3 "SF Mono", Consolas, monospace;
+  font: 12px/1.3 "SF Mono", Consolas, monospace;
 }
 
 .power-write-options {
@@ -584,35 +757,39 @@ label {
   font-size: 13px;
 }
 
-.ch0-preview-table code {
+.channel-preview-table code {
   white-space: nowrap;
 }
 
-.ch0-summary,
+.channel-summary,
+.frequency-summary,
 .power-summary {
   min-height: 42px;
   margin: 16px 0;
   padding: 11px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.58);
   color: var(--muted);
   font: 12px/1.45 "SF Mono", Consolas, monospace;
 }
 
-.ch0-summary.running,
+.channel-summary.running,
+.frequency-summary.running,
 .power-summary.running {
   color: var(--blue);
   border-color: rgba(0, 113, 227, 0.38);
 }
 
-.ch0-summary.pass,
+.channel-summary.pass,
+.frequency-summary.pass,
 .power-summary.pass {
   color: var(--green);
   border-color: rgba(36, 161, 72, 0.42);
 }
 
-.ch0-summary.fail,
+.channel-summary.fail,
+.frequency-summary.fail,
 .power-summary.fail {
   color: var(--red);
   border-color: rgba(217, 45, 32, 0.42);
@@ -796,6 +973,16 @@ canvas {
   background: #fff;
 }
 
+.ota-panel input[type="file"].visually-hidden {
+  width: 1px;
+  height: 1px;
+  min-height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 .ota-panel input[type="file"]::file-selector-button {
   min-height: 32px;
   margin-right: 10px;
@@ -868,10 +1055,15 @@ pre {
   .profile-entry,
   .asc-test-controls,
   .asc-write-box,
-  .ch0-config-grid,
-  .power-stage-grid,
+  .channel-config-grid,
+  .frequency-control-grid,
+  .frequency-control-grid-compact,
   .sivy-init-box {
     grid-template-columns: 1fr;
+  }
+
+  .power-field-row {
+    grid-template-columns: 130px minmax(180px, 1fr) 160px 58px;
   }
 
   .sivy-init-box {
@@ -928,6 +1120,66 @@ pre {
 
   .panel {
     padding: 12px;
+  }
+
+  .panel-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .panel-head > .sample-actions {
+    width: 100%;
+  }
+
+  .channel-block-summary {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    align-items: start;
+  }
+
+  .channel-actions {
+    width: 100%;
+  }
+
+  .frequency-group-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .power-field-row {
+    grid-template-columns: 1fr auto;
+    gap: 8px 12px;
+  }
+
+  .power-field-row input[type="range"] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .power-field-row output {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .power-field-row code {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .power-slider-card {
+    padding: 8px 0 0;
+  }
+
+  .power-register-preview {
+    margin: 10px 0 0;
+    overflow-wrap: anywhere;
+  }
+
+  .channel-write-options .compact-toggle,
+  .frequency-write-options .compact-toggle,
+  .power-write-options .compact-toggle {
+    width: 100%;
+    flex: 1 1 100%;
   }
 
   .status-grid div {

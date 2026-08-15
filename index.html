@@ -6,8 +6,8 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sivy ASC CH0 Test Console</title>
-  <link rel="stylesheet" href="./styles.css?v=20260805-ch0-i18n">
+  <title>Sivy ASC Register Console</title>
+  <link rel="stylesheet" href="./styles.css?v=20260815-four-channel-pll-output">
 </head>
 <body>
   <main class="shell">
@@ -15,8 +15,8 @@
       <div class="brand-lockup">
         <img class="brand-logo" src="./assets/sivy_logo.svg?v=20260629-logo" alt="Sivy 标志">
         <div>
-          <p class="eyebrow">Sivy ASC CH0 位域配置</p>
-          <h1>通道零寄存器控制台</h1>
+          <p class="eyebrow">Sivy ASC 寄存器位域配置</p>
+          <h1>ASC 寄存器控制台</h1>
         </div>
       </div>
       <div class="connection">
@@ -274,61 +274,209 @@
         </div>
       </section>
 
-      <section class="panel ch0-control-panel">
+      <section class="panel channel-control-panel">
         <div class="panel-head">
-          <h2>CH0 寄存器配置</h2>
+          <h2>ASC 四通道寄存器配置</h2>
+        </div>
+        <p class="channel-control-description">
+          CH0 至 CH3 使用相同的使能、PGA、阈值和特征提取位域；每个通道独立计算、掩码写入、回读反解和导出结果。
+        </p>
+        <div id="channelControlList" class="channel-control-list"></div>
+        <template id="channelControlTemplate">
+          <details class="channel-control-block">
+            <summary class="channel-block-summary">
+              <strong data-channel-title>CH0</strong>
+              <code data-channel-addresses>CTRL 0x0E · FEAT 0x10 · WORK 0x12 · WAIT 0x14</code>
+            </summary>
+            <div class="channel-block-content">
+              <div class="channel-actions sample-actions">
+                <button data-channel-id="ReadBtn" class="primary">读取并反解</button>
+                <button data-channel-id="WriteBtn">写入并回读校验</button>
+                <button data-channel-id="ExportBtn">导出 CSV</button>
+                <button data-channel-id="ClearBtn">清空结果</button>
+              </div>
+              <div class="channel-config-grid">
+                <label class="toggle"><span>CH_EN（bit 0）</span><input data-channel-id="Enable" type="checkbox" checked></label>
+                <label>PGA_GAIN（bits 5:2）
+                  <select data-channel-id="PgaGain">
+                    <option value="0">0x0：0.5x</option><option value="1">0x1：0.667x</option>
+                    <option value="2">0x2：0.8x</option><option value="3" selected>0x3：1x（默认）</option>
+                    <option value="4">0x4：1.333x</option><option value="5">0x5：2x</option>
+                    <option value="6">0x6：2.667x</option><option value="7">0x7：4x</option>
+                    <option value="8">0x8：0.25x（低噪声档）</option><option value="9">0x9：0.333x（低噪声档）</option>
+                    <option value="10">0xA：0.4x（低噪声档）</option><option value="11">0xB：0.5x（低噪声档）</option>
+                    <option value="12">0xC：0.667x（低噪声档）</option><option value="13">0xD：1x（低噪声档）</option>
+                    <option value="14">0xE：1.333x（低噪声档）</option><option value="15">0xF：2x（低噪声档）</option>
+                  </select>
+                </label>
+                <label>阈值电压 VTH（mV，bits 15:8）<input data-channel-id="VthMv" type="number" min="8" max="2048" step="8" value="8"></label>
+                <label>特征模式（FEAT_SEL，bit 0）
+                  <select data-channel-id="FeatSel"><option value="0" selected>脉冲时间戳</option><option value="1">窗口内周期均值</option></select>
+                </label>
+                <label class="toggle"><span>均值触发（AVG_TRG_EN，bit 1）</span><input data-channel-id="AvgTriggerEnable" type="checkbox"></label>
+                <label>均值触发边沿（AVG_TRG_HA，bits 3:2）
+                  <select data-channel-id="AvgTriggerEdge"><option value="0" selected>上升沿</option><option value="1">下降沿</option><option value="2">上升沿或下降沿</option></select>
+                </label>
+                <label>工作窗口（bits 11:0）<input data-channel-id="WorkWindow" type="number" min="0" max="4095" step="1" value="0"></label>
+                <label>等待窗口（bits 11:0）<input data-channel-id="WaitWindow" type="number" min="0" max="4095" step="1" value="0"></label>
+              </div>
+              <div class="channel-write-options">
+                <label class="toggle compact-toggle"><span>读写前打开 ASC 外部电源</span><input data-channel-id="PowerOn" type="checkbox" checked></label>
+                <label class="toggle compact-toggle"><span>确认写入当前通道可写位</span><input data-channel-id="WriteConfirm" type="checkbox"></label>
+              </div>
+              <p data-channel-id="DecodeWarning" class="channel-decode-warning"></p>
+              <div class="table-wrap">
+                <table class="test-table channel-preview-table">
+                  <thead><tr><th>寄存器</th><th>地址</th><th>可写掩码</th><th>计算值</th><th>位域计算</th></tr></thead>
+                  <tbody data-channel-id="PreviewRows"></tbody>
+                </table>
+              </div>
+              <div data-channel-id="Summary" class="channel-summary idle">调整控件后会实时显示计算寄存器值；写入前需要勾选确认。</div>
+              <div class="table-wrap">
+                <table class="test-table">
+                  <thead><tr><th>步骤</th><th>寄存器</th><th>地址</th><th>掩码</th><th>期望值</th><th>实际值</th><th>结果</th><th>说明</th></tr></thead>
+                  <tbody data-channel-id="ResultRows"></tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+        </template>
+      </section>
+
+      <section class="panel frequency-control-panel">
+        <div class="panel-head">
+          <h2>ASC 时钟与频率控制</h2>
           <div class="sample-actions">
-            <button id="ch0ReadBtn" class="primary">读取 CH0 并反解</button>
-            <button id="ch0WriteBtn">写入并回读校验</button>
-            <button id="ch0ExportBtn">导出 CSV</button>
-            <button id="ch0ClearBtn">清空结果</button>
+            <button id="frequencyReadBtn" class="primary">读取并反解</button>
+            <button id="frequencyWriteBtn">写入并回读校验</button>
+            <button id="frequencyExportBtn">导出 CSV</button>
+            <button id="frequencyClearBtn">清空结果</button>
           </div>
         </div>
-        <p class="ch0-control-description">
-          控件只覆盖 CH0 的可写位：CH0_CTRL[0x0E]、CH0_FEAT[0x10]、CH0_AVG_WORKWIN[0x12]、CH0_AVG_WAITWIN[0x14]。
-          页面实时计算位域值，并使用掩码更新保留位不变。
+        <p class="frequency-control-description">
+          控件来自寄存器表 v4p4，覆盖系统时钟、PLL/HSI、MC 分频、输出脉宽、输入带宽、QSPI 分频和 CO 时钟输出。
+          页面只更新对应位域，其他控制位与保留位保持不变。
         </p>
-        <div class="ch0-config-grid">
-          <label class="toggle"><span>CH_EN（bit 0）</span><input id="ch0Enable" type="checkbox" checked></label>
-          <label>PGA_GAIN（bits 5:2）
-            <select id="ch0PgaGain">
-              <option value="0">0x0：0.5x</option><option value="1">0x1：0.667x</option>
-              <option value="2">0x2：0.8x</option><option value="3" selected>0x3：1x（默认）</option>
-              <option value="4">0x4：1.333x</option><option value="5">0x5：2x</option>
-              <option value="6">0x6：2.667x</option><option value="7">0x7：4x</option>
-              <option value="8">0x8：0.25x（低噪声档）</option><option value="9">0x9：0.333x（低噪声档）</option>
-              <option value="10">0xA：0.4x（低噪声档）</option><option value="11">0xB：0.5x（低噪声档）</option>
-              <option value="12">0xC：0.667x（低噪声档）</option><option value="13">0xD：1x（低噪声档）</option>
-              <option value="14">0xE：1.333x（低噪声档）</option><option value="15">0xF：2x（低噪声档）</option>
-            </select>
-          </label>
-          <label>阈值电压 VTH（mV，bits 15:8）<input id="ch0VthMv" type="number" min="8" max="2048" step="8" value="8" title="仅支持 8 mV 整数档；页面会自动换算 VTH 原始码"></label>
-          <label>特征模式（FEAT_SEL，bit 0）
-            <select id="ch0FeatSel"><option value="0" selected>脉冲时间戳</option><option value="1">窗口内周期均值</option></select>
-          </label>
-          <label class="toggle"><span>均值触发（AVG_TRG_EN，bit 1）</span><input id="ch0AvgTriggerEnable" type="checkbox"></label>
-          <label>均值触发边沿（AVG_TRG_HA，bits 3:2）
-            <select id="ch0AvgTriggerEdge"><option value="0" selected>上升沿</option><option value="1">下降沿</option><option value="2">上升沿或下降沿</option></select>
-          </label>
-          <label>工作窗口（bits 11:0）<input id="ch0WorkWindow" type="number" min="0" max="4095" step="1" value="0"></label>
-          <label>等待窗口（bits 11:0）<input id="ch0WaitWindow" type="number" min="0" max="4095" step="1" value="0"></label>
+
+        <div class="frequency-groups">
+          <section class="frequency-group">
+            <div class="frequency-group-head"><h3>系统时钟与输出脉冲</h3><code>GLB_CTRL0 [0x00] / GLB_CTRL1 [0x02]</code></div>
+            <div class="frequency-control-grid">
+              <label>工作频率（CLK_SEL，bit 0）
+                <select id="frequencyClockSelect"><option value="0" selected>5 MHz</option><option value="1">50 MHz</option></select>
+              </label>
+              <label>主时钟来源（CLK_IN_SEL，bit 0）
+                <select id="frequencyMainSource"><option value="0" selected>HSI 内部振荡器</option><option value="1">PLL</option></select>
+              </label>
+              <label>MC 输入分频（MC_SEL，bits 8:1）
+                <input id="frequencyMcDivider" type="number" min="0" max="254" step="2" value="0">
+                <small>0：不分频；2 至 254：偶数分频</small>
+              </label>
+              <label>输出脉宽（SAMP_CTRL，bits 4:2）
+                <select id="frequencyPulseWidth">
+                  <option value="0">1 MC</option><option value="1">2 MC</option><option value="2">3 MC</option>
+                  <option value="3" selected>4 MC（默认）</option><option value="4">5 MC</option><option value="5">6 MC</option>
+                  <option value="6">10 MC</option><option value="7">20 MC</option>
+                </select>
+              </label>
+              <label>通道输入带宽（CC_SEL，bits 10:9）
+                <select id="frequencyBandwidth">
+                  <option value="0" selected>&gt; 2 MHz（默认）</option><option value="1">1 MHz 至 2 MHz</option>
+                  <option value="2">800 kHz 至 1 MHz</option><option value="3">&lt; 800 kHz</option>
+                </select>
+              </label>
+              <label>采样开关（SAMPSW_SEL，bit 10）
+                <select id="frequencySampleSwitch"><option value="0" selected>低速开关（默认）</option><option value="1">高速开关（输入 &gt; 1 MHz）</option></select>
+              </label>
+            </div>
+          </section>
+
+          <section class="frequency-group">
+            <div class="frequency-group-head"><h3>PLL 输入与调节</h3><code>PLL_CTRL [0x04]</code></div>
+            <div class="frequency-control-grid">
+              <label>PLL 输入来源（PLL_CLK_SEL，bit 14）
+                <select id="frequencyPllSource"><option value="0" selected>HSI 内部振荡器</option><option value="1">ECLK / HSE 外部晶振</option></select>
+              </label>
+              <label>外部输入频率（MHz，仅用于预计）
+                <input id="frequencyExternalClockMHz" type="number" min="0.000001" step="0.001" placeholder="例如 50">
+                <small>选择 ECLK/HSE 时填写；不会写入寄存器</small>
+              </label>
+              <label class="toggle"><span>PLL 使能（PLL_EN，bit 0）</span><input id="frequencyPllEnable" type="checkbox" checked></label>
+              <label>电荷泵增益（PLL_DICP，bit 1）
+                <select id="frequencyPllDicp"><option value="0" selected>0（默认）</option><option value="1">1</option></select>
+              </label>
+              <label>KVCO 调节（RES_PLL_CTR，bits 5:2）
+                <input id="frequencyPllKvco" type="number" min="0" max="15" step="1" value="8">
+                <small>0：频率较大；8：默认；15：频率较小</small>
+              </label>
+              <label>输入分频 M（PLL_DM，bits 7:6）
+                <select id="frequencyPllDm"><option value="0" selected>÷1</option><option value="1">÷2</option><option value="2">÷3</option><option value="3">÷4</option></select>
+              </label>
+              <label>VCO 倍频 N（PLL_DN，bits 10:8）
+                <select id="frequencyPllDn"><option value="0" selected>×32</option><option value="1">×48</option><option value="2">×64</option><option value="3">×80</option><option value="4">×96</option><option value="5">×112</option><option value="6">×128</option><option value="7">×144</option></select>
+              </label>
+              <label>输出分频 P（PLL_DP，bits 12:11）
+                <select id="frequencyPllDp"><option value="0" selected>÷1</option><option value="1">÷2</option><option value="2">÷4</option><option value="3">÷8</option></select>
+              </label>
+              <label class="toggle"><span>PLL 旁路（PLL_BYPASS，bit 13）</span><input id="frequencyPllBypass" type="checkbox"></label>
+              <label>PLL 功耗（PLL_PW，bits 15:14）
+                <select id="frequencyPllPower"><option value="0">75%</option><option value="1" selected>100%（默认）</option><option value="2">125%</option><option value="3">150%</option></select>
+              </label>
+            </div>
+            <p id="frequencyPllPreview" class="frequency-formula-preview"></p>
+            <output id="frequencyPllOutput" class="frequency-pll-output">PLL 预计输出频率：--</output>
+          </section>
+
+          <section class="frequency-group">
+            <div class="frequency-group-head"><h3>HSI 内部振荡器</h3><code>HSI_CTRL [0x06]</code></div>
+            <div class="frequency-control-grid">
+              <label class="toggle"><span>HSI 使能（HSI_EN，bit 0）</span><input id="frequencyHsiEnable" type="checkbox" checked></label>
+              <label>HSI 标称频率（HSI_SEL，bit 1）
+                <select id="frequencyHsiSelect"><option value="0" selected>48 MHz（默认）</option><option value="1">72 MHz</option></select>
+              </label>
+              <label>HSI 粗调（HSI_TRIM[10:6]）
+                <input id="frequencyHsiCoarse" type="number" min="0" max="31" step="1" value="16">
+              </label>
+              <label>HSI 细调（HSI_TRIM[5:0]）
+                <input id="frequencyHsiFine" type="number" min="0" max="63" step="1" value="0">
+              </label>
+            </div>
+            <p id="frequencyHsiPreview" class="frequency-formula-preview"></p>
+          </section>
+
+          <section class="frequency-group">
+            <div class="frequency-group-head"><h3>接口与时钟输出</h3><code>QSPI_CTRL [0x0A] / CO_CTRL [0x3A]</code></div>
+            <div class="frequency-control-grid frequency-control-grid-compact">
+              <label>QSPI 主模式时钟分频（SCLK_FRQ，bits 6:5）
+                <select id="frequencyQspiDivider"><option value="0" selected>不分频</option><option value="1">÷2</option><option value="2">÷4</option><option value="3">÷8</option></select>
+              </label>
+              <label>CO 时钟输出（COSEL，bits 5:3）
+                <select id="frequencyClockOutput">
+                  <option value="0" selected>关闭</option><option value="1">ECLK 外部晶振</option><option value="2">HSI</option>
+                  <option value="3">PLL</option><option value="4">系统时钟</option>
+                  <option value="5" disabled>保留值 0b101</option><option value="6" disabled>保留值 0b110</option><option value="7" disabled>保留值 0b111</option>
+                </select>
+              </label>
+            </div>
+          </section>
         </div>
-        <div class="ch0-write-options">
-          <label class="toggle compact-toggle"><span>读写前打开 ASC 外部电源</span><input id="ch0PowerOn" type="checkbox" checked></label>
-          <label class="toggle compact-toggle"><span>确认写入 CH0 可写位</span><input id="ch0WriteConfirm" type="checkbox"></label>
+
+        <div class="frequency-write-options">
+          <label class="toggle compact-toggle"><span>读写前打开 ASC 外部电源</span><input id="frequencyPowerOn" type="checkbox" checked></label>
+          <label class="toggle compact-toggle"><span>确认写入时钟与频率位域</span><input id="frequencyWriteConfirm" type="checkbox"></label>
         </div>
-        <p id="ch0DecodeWarning" class="ch0-decode-warning"></p>
+        <p id="frequencyDecodeWarning" class="frequency-decode-warning"></p>
         <div class="table-wrap">
-          <table class="test-table ch0-preview-table">
+          <table class="test-table frequency-preview-table">
             <thead><tr><th>寄存器</th><th>地址</th><th>可写掩码</th><th>计算值</th><th>位域计算</th></tr></thead>
-            <tbody id="ch0PreviewRows"></tbody>
+            <tbody id="frequencyPreviewRows"></tbody>
           </table>
         </div>
-        <div id="ch0Summary" class="ch0-summary idle">调整控件后会实时显示计算寄存器值；写入前需要勾选确认。</div>
+        <div id="frequencySummary" class="frequency-summary idle">调整控件后会实时显示频率相关寄存器值；写入前需要勾选确认。</div>
         <div class="table-wrap">
           <table class="test-table">
             <thead><tr><th>步骤</th><th>寄存器</th><th>地址</th><th>掩码</th><th>期望值</th><th>实际值</th><th>结果</th><th>说明</th></tr></thead>
-            <tbody id="ch0ResultRows"></tbody>
+            <tbody id="frequencyResultRows"></tbody>
           </table>
         </div>
       </section>
@@ -344,50 +492,55 @@
           </div>
         </div>
         <p class="power-control-description">
-          一个联动滑块同步配置 PW_CTRL（旧名 CPW_CTRL）[0x38] 的全局、输入运放、PGA、采样运放和比较器功耗。
-          每档对应 25% 至 200% 的模拟功耗比例；页面通过 UPDATE_BITS 掩码 <code>0x7FFF</code> 写入，不修改保留的 bit 15。
+          五个滑块分别配置 PW_CTRL（旧名 CPW_CTRL）[0x38] 的全局、输入运放、PGA、采样运放和比较器功耗。
+          每个字段可独立选择 25% 至 200%；页面通过 UPDATE_BITS 掩码 <code>0x7FFF</code> 写入，不修改保留的 bit 15。
         </p>
+        <datalist id="powerLevelTicks">
+          <option value="0" label="25%"></option><option value="1" label="50%"></option>
+          <option value="2" label="75%"></option><option value="3" label="100%"></option>
+          <option value="4" label="125%"></option><option value="5" label="150%"></option>
+          <option value="6" label="175%"></option><option value="7" label="200%"></option>
+        </datalist>
+        <div class="power-field-list">
+          <article id="powerStagePwrCtl" class="power-field-row">
+            <div class="power-field-name"><strong>PWR_CTL</strong><span>bits 2:0 · 全局</span></div>
+            <input id="powerPwrCtlLevel" aria-label="PWR_CTL 功耗挡位" type="range" min="0" max="7" step="1" value="3" list="powerLevelTicks">
+            <output id="powerPwrCtlValue">100%</output><code id="powerPwrCtlCode">0b011</code>
+          </article>
+          <article id="powerStageAmpIn" class="power-field-row">
+            <div class="power-field-name"><strong>PW_AMPIN</strong><span>bits 5:3 · 输入运放</span></div>
+            <input id="powerAmpInLevel" aria-label="PW_AMPIN 功耗挡位" type="range" min="0" max="7" step="1" value="3" list="powerLevelTicks">
+            <output id="powerAmpInValue">100%</output><code id="powerAmpInCode">0b011</code>
+          </article>
+          <article id="powerStagePga" class="power-field-row">
+            <div class="power-field-name"><strong>PW_PGA</strong><span>bits 8:6 · PGA</span></div>
+            <input id="powerPgaLevel" aria-label="PW_PGA 功耗挡位" type="range" min="0" max="7" step="1" value="3" list="powerLevelTicks">
+            <output id="powerPgaValue">100%</output><code id="powerPgaCode">0b011</code>
+          </article>
+          <article id="powerStageSampAmp" class="power-field-row">
+            <div class="power-field-name"><strong>PW_SAMPAMP</strong><span>bits 11:9 · 采样运放</span></div>
+            <input id="powerSampAmpLevel" aria-label="PW_SAMPAMP 功耗挡位" type="range" min="0" max="7" step="1" value="3" list="powerLevelTicks">
+            <output id="powerSampAmpValue">100%</output><code id="powerSampAmpCode">0b011</code>
+          </article>
+          <article id="powerStageComp" class="power-field-row">
+            <div class="power-field-name"><strong>PW_COMP</strong><span>bits 14:12 · 比较器</span></div>
+            <input id="powerCompLevel" aria-label="PW_COMP 功耗挡位" type="range" min="0" max="7" step="1" value="3" list="powerLevelTicks">
+            <output id="powerCompValue">100%</output><code id="powerCompCode">0b011</code>
+          </article>
+        </div>
         <div class="power-slider-card">
-          <div class="power-slider-heading">
-            <label for="powerLevel">功耗挡位（五路联动）</label>
-            <output id="powerLevelLabel" class="power-level-label">100%（档位 3 / 0b011）</output>
-          </div>
-          <input id="powerLevel" class="power-level-slider" type="range" min="0" max="7" step="1" value="3" list="powerLevelTicks">
-          <datalist id="powerLevelTicks">
-            <option value="0" label="25%"></option><option value="1" label="50%"></option>
-            <option value="2" label="75%"></option><option value="3" label="100%"></option>
-            <option value="4" label="125%"></option><option value="5" label="150%"></option>
-            <option value="6" label="175%"></option><option value="7" label="200%"></option>
-          </datalist>
           <div class="power-scale" aria-hidden="true">
             <span>25%</span><span>50%</span><span>75%</span><span>100%</span>
             <span>125%</span><span>150%</span><span>175%</span><span>200%</span>
           </div>
           <p id="powerRegisterPreview" class="power-register-preview"></p>
         </div>
-        <div class="power-stage-grid" aria-live="polite">
-          <article id="powerStagePwrCtl" class="power-stage">
-            <div><strong>PWR_CTL</strong><span>bits 2:0 · 全局</span></div><output id="powerPwrCtlValue">100%</output><code id="powerPwrCtlCode">0b011</code>
-          </article>
-          <article id="powerStageAmpIn" class="power-stage">
-            <div><strong>PW_AMPIN</strong><span>bits 5:3 · 输入运放</span></div><output id="powerAmpInValue">100%</output><code id="powerAmpInCode">0b011</code>
-          </article>
-          <article id="powerStagePga" class="power-stage">
-            <div><strong>PW_PGA</strong><span>bits 8:6 · PGA</span></div><output id="powerPgaValue">100%</output><code id="powerPgaCode">0b011</code>
-          </article>
-          <article id="powerStageSampAmp" class="power-stage">
-            <div><strong>PW_SAMPAMP</strong><span>bits 11:9 · 采样运放</span></div><output id="powerSampAmpValue">100%</output><code id="powerSampAmpCode">0b011</code>
-          </article>
-          <article id="powerStageComp" class="power-stage">
-            <div><strong>PW_COMP</strong><span>bits 14:12 · 比较器</span></div><output id="powerCompValue">100%</output><code id="powerCompCode">0b011</code>
-          </article>
-        </div>
         <div class="power-write-options">
           <label class="toggle compact-toggle"><span>读写前打开 ASC 外部电源</span><input id="powerControlPowerOn" type="checkbox" checked></label>
-          <label class="toggle compact-toggle"><span>确认写入 PW_CTRL 的五个功耗字段</span><input id="powerWriteConfirm" type="checkbox"></label>
+          <label class="toggle compact-toggle"><span>确认写入 PW_CTRL 的五个独立功耗字段</span><input id="powerWriteConfirm" type="checkbox"></label>
         </div>
         <p id="powerDecodeWarning" class="power-decode-warning"></p>
-        <div id="powerSummary" class="power-summary idle">调整滑块后会实时计算 PW_CTRL；写入前需要勾选确认。</div>
+        <div id="powerSummary" class="power-summary idle">五个滑块可独立调整；写入前需要勾选确认。</div>
         <div class="table-wrap">
           <table class="test-table">
             <thead><tr><th>步骤</th><th>寄存器</th><th>地址</th><th>掩码</th><th>期望值</th><th>实际值</th><th>结果</th><th>说明</th></tr></thead>
@@ -445,6 +598,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260805-ch0-i18n"></script>
+  <script src="./app.js?v=20260815-four-channel-pll-output"></script>
 </body>
 </html>

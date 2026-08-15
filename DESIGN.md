@@ -1,4 +1,4 @@
-# Sivy ASC CH0 寄存器控制台设计与实现说明
+# Sivy ASC 寄存器控制台设计与实现说明
 
 ## 目标
 
@@ -11,7 +11,7 @@ Web Console 面向板级 bring-up 和现场调试，目标是替代一部分 UAR
 5. 读取本地 OTA 镜像，并通过标准 MCUmgr SMP over BLE 上传、测试启动和复位。
 6. 支持可配置 BLE 选择策略，避免固件广播名变化后网页无法检索设备。
 7. 对 `firmware/sivy_asc_test` 的 Sivy-1 I2C 默认值快照进行设备侧和网页侧双重校验，避免旧固件参考值误导测试结论。
-8. 用配置控件计算 `CH0` 的字段移位和掩码更新值，写入后自动读回并反解控件。
+8. 用独立配置控件计算 `CH0..CH3` 的字段移位和掩码更新值，写入后自动读回并反解对应通道控件。
 
 本目录从正式 `tools/asc_web_console` 复制而来，但测试专用协议只适用于
 `Sivy_ASC_Test`。正式 `Sivy_ASC_V0` 固件不实现该协议，必须使用正式网页。
@@ -126,23 +126,33 @@ SIVY_TEST_RESULT 41534308-7a6d-4ef9-9c6b-5c5940000001
 的 29 项参考值。若设备仍上报旧的 `0x38=0x0000`，表格显示“固件期望值不一致”，
 最终汇总为失败，CSV 同时保留网页期望值和固件期望值以便追溯。
 
-## CH0 位域配置
+## 四通道位域配置
 
-CH0 面板复用已存在的 `REG_REQ/REG_RSP` 特征（UUID 后缀 `05/06`），不新增
+四通道面板复用已存在的 `REG_REQ/REG_RSP` 特征（UUID 后缀 `05/06`），不新增
 固件协议，也不修改 `tools/sivy_asc_test_console`。所有寄存器访问使用
 `target=ASC I2C`、`width=16-bit`，写入使用 `UPDATE_BITS`：
 
-| 寄存器 | 地址 | value 计算 | mask |
-| --- | --- | --- | --- |
-| `CH0_CTRL` | `0x0E` | `CH_EN << 0 | PGA_GAIN << 2 | VTH << 8` | `0xFF3D` |
-| `CH0_FEAT` | `0x10` | `FEAT_SEL << 0 | AVG_TRG_EN << 1 | AVG_TRG_HA << 2` | `0x000F` |
-| `CH0_AVG_WORKWIN` | `0x12` | `WORK_WINDOW` | `0x0FFF` |
-| `CH0_AVG_WAITWIN` | `0x14` | `WAIT_WINDOW` | `0x0FFF` |
+| 通道 | `CTRL` | `FEAT` | `AVG_WORKWIN` | `AVG_WAITWIN` |
+| --- | --- | --- | --- | --- |
+| CH0 | `0x0E` | `0x10` | `0x12` | `0x14` |
+| CH1 | `0x16` | `0x18` | `0x1A` | `0x1C` |
+| CH2 | `0x1E` | `0x20` | `0x22` | `0x24` |
+| CH3 | `0x26` | `0x28` | `0x2A` | `0x2C` |
+
+每个通道使用相同的计算式和掩码：
+
+| 寄存器类型 | value 计算 | mask |
+| --- | --- | --- |
+| `CHx_CTRL` | `CH_EN << 0 | PGA_GAIN << 2 | VTH << 8` | `0xFF3D` |
+| `CHx_FEAT` | `FEAT_SEL << 0 | AVG_TRG_EN << 1 | AVG_TRG_HA << 2` | `0x000F` |
+| `CHx_AVG_WORKWIN` | `WORK_WINDOW` | `0x0FFF` |
+| `CHx_AVG_WAITWIN` | `WAIT_WINDOW` | `0x0FFF` |
 
 页面实时展示 value、mask 与字段变量。写入流程必须先由用户确认，然后可选打开
 ASC 外部电源，依次发送四个 `UPDATE_BITS` 请求，最后按相同地址读取。比较时仅
-比较 mask 内的可写位；保留位不参与通过/失败判定。所有四项读取成功时，页面把
-实际位域反解回控件。`AVG_TRG_HA=0b11` 是保留值，读回时显示警告且不会被当作
+比较 mask 内的可写位；保留位不参与通过/失败判定。每个通道维护独立的控件、确认
+开关、结果表和 CSV 数据。该通道全部四项读取成功时，页面只把实际位域反解回对应
+通道控件。`AVG_TRG_HA=0b11` 是保留值，读回时显示带通道号的警告且不会被当作
 可配置边沿写入。
 
 Excel 为 `VTH[15:8]` 定义 `0x00..0xFF` 对应 `8..2048 mV`。页面只向用户显示和
@@ -155,6 +165,38 @@ VTH_mV   = (VTH_code + 1) * 8
 
 因此 VTH 输入范围为 `8..2048 mV`，且必须为 `8 mV` 的整数档；页面不会对任意
 mV 输入静默取整，避免阈值与用户设置不一致。
+
+## 时钟与频率位域控制
+
+时钟与频率面板根据 Excel v4p4 提取 6 个寄存器中的相关字段，并继续复用
+`REG_REQ/REG_RSP`、`target=ASC I2C`、`width=16-bit` 与 `UPDATE_BITS`：
+
+| 寄存器 | 地址 | 控制字段 | mask |
+| --- | --- | --- | --- |
+| `GLB_CTRL0` | `0x00` | `CLK_SEL`、`SAMP_CTRL`、`CC_SEL` | `0x061D` |
+| `GLB_CTRL1` | `0x02` | `CLK_IN_SEL`、`MC_SEL`、`SAMPSW_SEL`、`PLL_CLK_SEL` | `0x45FF` |
+| `PLL_CTRL` | `0x04` | `PLL_EN`、`PLL_DICP`、`RES_PLL_CTR`、`PLL_DM/DN/DP`、`PLL_BYPASS`、`PLL_PW` | `0xFFFF` |
+| `HSI_CTRL` | `0x06` | `HSI_EN`、`HSI_SEL`、`HSI_TRIM` | `0x1FFF` |
+| `QSPI_CTRL` | `0x0A` | `SCLK_FRQ` | `0x0060` |
+| `CO_CTRL` | `0x3A` | `COSEL` | `0x0038` |
+
+`SAMP_CTRL=0..7` 分别映射 `1/2/3/4/5/6/10/20 MC` 的输出脉宽。
+`MC_SEL` 只接受 `0`（不分频）或 `2..254` 的偶数分频值。`HSI_TRIM[10:0]`
+拆成 5-bit 粗调和 6-bit 细调显示，同时保留合成 raw code 预览。
+
+为避免先把主时钟切到尚未配置的源，写入顺序固定为：
+
+```text
+HSI_CTRL -> PLL_CTRL -> QSPI_CTRL -> CO_CTRL -> GLB_CTRL0 -> GLB_CTRL1
+```
+
+写 `HSI_CTRL` 后至少等待 `1 us`，再继续后续寄存器。全部写入完成后读取 6 个
+寄存器，只比较各自 mask 内的位；读取操作也会把硬件值逐字段反解回控件。
+
+PLL 区额外提供预计输出频率计算。选择 HSI 时使用 `HSI_SEL` 对应的 48/72 MHz
+标称值（不估算 `HSI_TRIM` 偏移）；选择 ECLK/HSE 时使用用户填写、且不会写入
+寄存器的外部输入 MHz 值。正常模式计算 `Fout = Fin * N / M / P`，旁路模式计算
+`Fout = Fin`。
 
 ## PW_CTRL 功耗挡位控制
 
@@ -170,18 +212,18 @@ mV 输入静默取整，避免阈值与用户设置不一致。
 | `PW_SAMPAMP` | `[11:9]` | 9 |
 | `PW_COMP` | `[14:12]` | 12 |
 
-网页的一个滑块给五个字段应用同一 `level`（`0..7`）：
+网页给五个字段各提供一个独立 `level`（`0..7`）滑块：
 
 ```text
-value = (level << 0) | (level << 3) | (level << 6) | (level << 9) | (level << 12)
+value = (pwr_ctl << 0) | (pw_ampin << 3) | (pw_pga << 6)
+      | (pw_sampamp << 9) | (pw_comp << 12)
 mask  = 0x7FFF
 ```
 
 `level=0..7` 分别代表 `25%`、`50%`、`75%`、`100%`、`125%`、`150%`、`175%` 和
 `200%` 的模拟功耗比例。`level=3` 的值为 `0x36DB`，也是 Excel 的默认值。写入请求
 使用 `UPDATE_BITS`，因此保留的 bit 15 不变；写后读取 `0x38` 并只比较 `mask` 内的
-位。读取到非统一挡位时，页面会逐字段可视化实际比例、提示用户，并把滑块定位为
-`PWR_CTL` 的值，只有用户主动移动滑块并确认写入才会使五个字段重新联动。
+位。读取时每个字段只更新对应滑块；页面不会再把不同挡位同步为一个共享值。
 
 ## OTA 设计
 
@@ -209,7 +251,7 @@ OTA 不重新定义 ASC 私有协议，而是直接使用 Zephyr/NCS 标准 MCUm
 ## 发布边界
 
 本仓库的 GitHub Pages workflow 会从 `main` 部署该控制台。部署页面连接的是
-`Sivy_ASC_Test` 测试固件，包含 CH0、`PW_CTRL` 写入和 BLE OTA，因此仅限受控
+`Sivy_ASC_Test` 测试固件，包含四通道、`PW_CTRL` 写入和 BLE OTA，因此仅限受控
 bring-up 环境使用，不是生产设备管理后台。
 
 Web Bluetooth 仍要求浏览器用户主动选择和授权设备，但公开部署前必须审查 BLE
