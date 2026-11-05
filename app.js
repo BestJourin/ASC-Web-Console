@@ -1,6 +1,6 @@
 'use strict';
 
-const WEB_CONSOLE_BUILD = '20260815-four-channel-pll-output';
+const WEB_CONSOLE_BUILD = '20261105-rigol-secure-manual';
 
 const UUIDS = {
   ascService: '41534300-7a6d-4ef9-9c6b-5c5940000001',
@@ -19,6 +19,18 @@ const UUIDS = {
 const DEFAULT_NAME_PREFIX = 'Sivy_ASC_Test';
 const DEFAULT_DEVICE_NAME = 'Sivy_ASC_Test';
 const DEFAULT_FILTER_MODE = 'allDevices';
+const AUTOMATION_DEVICE_NAME_PREFIX = 'Sivy';
+const AUTOMATION_TARGET_ADDRESS = 'C3:09:E1:7D:0D:08';
+const AUTOMATION_SIVY_TIMEOUT_MS = 30000;
+const DEFAULT_SCOPE_IP = '192.168.110.10';
+const DEFAULT_SCOPE_MAC = '00:19:AF:AD:06:A4';
+const DEFAULT_SCOPE_PORT = 5025;
+const DEFAULT_GENERATOR_IP = '192.168.110.11';
+const DEFAULT_GENERATOR_PORT = 5555;
+const DEFAULT_SCOPE_BRIDGE_URL = 'ws://127.0.0.1:8765';
+const SCOPE_SETTINGS_STORAGE_KEY = 'sivy-rigol-scope-settings';
+const SCOPE_ACCESS_KEY_STORAGE_KEY = 'sivy-rigol-bridge-access-key';
+const GENERATOR_SETTINGS_STORAGE_KEY = 'sivy-rigol-generator-settings';
 
 const CTRL = {
   POWER_OFF: 0x01,
@@ -200,17 +212,40 @@ const state = {
   frequencyRows: [],
   powerRows: [],
   sivyTestReferenceOutOfSync: false,
+  sivyTestCompletion: null,
   otaBytes: null,
   otaName: '',
   otaInfo: null,
   otaSourceModifiedMs: 0,
   bluetoothReady: false,
+  autoTest: {
+    running: false,
+    currentStep: null,
+  },
+  scope: {
+    source: 'video',
+    socket: null,
+    frame: null,
+    screenshot: null,
+    frameCount: 0,
+    videoDecoder: null,
+    videoGeneration: 0,
+    videoQueue: [],
+    videoPumping: false,
+    videoParameterBytes: null,
+    videoFrameCount: 0,
+    videoFpsCounter: { startedAt: performance.now(), frames: 0, fps: 0 },
+    pendingVideoFrame: null,
+    videoFrameRequest: 0,
+  },
 };
 
 const $ = (id) => document.getElementById(id);
 const logView = $('logView');
 const canvas = $('sampleCanvas');
 const ctx = canvas.getContext('2d');
+const scopeCanvas = $('scopeCanvas');
+const scopeCtx = scopeCanvas.getContext('2d');
 
 const LANGUAGE_STORAGE_KEY = 'sivy-asc-console-language';
 const LANGUAGE_TEXT_EN = Object.freeze({
@@ -323,6 +358,42 @@ const LANGUAGE_TEXT_EN = Object.freeze({
   '镜像状态': 'Image state', '未选择文件': 'No file selected', '空闲': 'Idle', '上传并测试': 'Upload and test',
   '选择 OTA 文件': 'Choose OTA file',
   '重启': 'Restart', '事件': 'Events', '0x3：1x（默认）': '0x3: 1x (default)',
+  '一键自动测试': 'One-Click Automatic Test', '一键连接并测试': 'Connect and run all tests',
+  '依次连接 Sivy 蓝牙设备、执行 I²C 参考测试，并只配置 CH0 的 32 mV 阈值。 浏览器出于安全限制要求在选择器中人工点选一次 Sivy 设备，其余步骤自动完成。':
+    'Connect to the Sivy Bluetooth device, run the I²C reference test, and configure only CH0 with a 32 mV threshold. Browser security requires selecting the Sivy device once in the picker; all remaining steps run automatically.',
+  '连接目标蓝牙设备': 'Connect target Bluetooth device', '待执行': 'Pending',
+  '名称以 Sivy 开头；目标地址 C3:09:E1:7D:0D:08': 'Name starts with Sivy; target address C3:09:E1:7D:0D:08',
+  '等待上一步': 'Waiting for previous step', 'Sivy I²C 参考测试': 'Sivy I²C Reference Test',
+  '仅数值不匹配时给出警告并继续；I²C 通信错误会中止流程。':
+    'Value-only mismatches produce a warning and continue; I²C communication errors stop the workflow.',
+  '配置 CH0 并回读校验': 'Configure CH0 and verify readback',
+  '勾选可写位确认，设置阈值 32 mV，执行掩码写入和四项寄存器回读。':
+    'Confirm writable bits, set the threshold to 32 mV, then perform masked writes and readback verification for four registers.',
+  '实时波形监视': 'Live Waveform Monitor', 'BLE 待连接': 'BLE disconnected', '等待 RIGOL 实时画面': 'Waiting for the RIGOL live view',
+  '连接示波器后直接显示原厂 H.264 图像流。': 'Connect the oscilloscope to show its native H.264 stream directly.',
+  '数据源：ASC BLE ADC': 'Source: ASC BLE ADC', '尚无数据帧': 'No data frames',
+  '显示源': 'Display source', 'RIGOL 高帧率实时画面': 'RIGOL high-frame-rate live view',
+  'RIGOL 截图兼容模式': 'RIGOL screenshot compatibility mode',
+  '示波器 IP': 'Oscilloscope IP', '截图刷新间隔': 'Screenshot interval', '数据桥地址': 'Data bridge URL',
+  '访问密钥': 'Access key', '本机桥可留空': 'Leave empty for the local bridge',
+  '本机使用保持 ws://127.0.0.1:8765；公网桥应填写 wss:// 地址和访问密钥。使用前请手动运行 start-scope-bridge.cmd。':
+    'Keep ws://127.0.0.1:8765 locally. A public bridge requires a wss:// URL and access key. Run start-scope-bridge.cmd manually before use.',
+  'BLE 数据已接入': 'BLE data ready', '原厂高帧率画面': 'Native high-frame-rate view',
+  '全屏显示': 'Fullscreen', '退出全屏': 'Exit fullscreen',
+  '连接数据源': 'Connect data source', '断开数据源': 'Disconnect data source',
+  'RIGOL MHO 5054 · 192.168.110.10': 'RIGOL MHO 5054 · 192.168.110.10',
+  '默认直接播放示波器 H.264 实时画面；截图模式仅用于兼容排查。MAC 仅用于核对，连接使用 IP。':
+    'The default view plays the oscilloscope H.264 stream directly. Screenshot mode is only a compatibility fallback. MAC is for identification only; the IP is used to connect.',
+  '信号发生器 RIGOL DG4102': 'RIGOL DG4102 Signal Generator',
+  '默认 CH1、三角波、1 Vpp、1 kHz。调整后点击一次即可写入并打开输出。':
+    'Defaults to CH1, triangle, 1 Vpp, 1 kHz. Click once to apply the settings and enable the output.',
+  '信号发生器 IP': 'Signal-generator IP', '输出通道': 'Output channel', '波形': 'Waveform',
+  '三角波': 'Triangle', '正弦波': 'Sine', '方波': 'Square', '脉冲': 'Pulse',
+  '幅值（Vpp）': 'Amplitude (Vpp)', '频率（Hz）': 'Frequency (Hz)', '输出负载': 'Output load',
+  '高阻（High-Z）': 'High-Z', '应用并打开输出': 'Apply and enable output',
+  '读取当前设置': 'Read current settings', '关闭当前通道': 'Disable current channel',
+  '方波和脉冲默认使用 50% 占空比；三角波使用固定 50% 对称度。该操作不会加入一键自动测试。':
+    'Square and pulse use 50% duty by default; triangle uses 50% symmetry. This operation is not part of the one-click workflow.',
   '0x8：0.25x（低噪声档）': '0x8: 0.25x (low-noise)', '0x9：0.333x（低噪声档）': '0x9: 0.333x (low-noise)',
   '0xA：0.4x（低噪声档）': '0xA: 0.4x (low-noise)', '0xB：0.5x（低噪声档）': '0xB: 0.5x (low-noise)',
   '0xC：0.667x（低噪声档）': '0xC: 0.667x (low-noise)', '0xD：1x（低噪声档）': '0xD: 1x (low-noise)',
@@ -330,6 +401,39 @@ const LANGUAGE_TEXT_EN = Object.freeze({
 });
 
 const LANGUAGE_FRAGMENT_EN = Object.freeze([
+  ['自动测试正在执行', 'Automated test is running'],
+  ['自动测试已完成', 'Automated test completed'],
+  ['自动测试已中止', 'Automated test stopped'],
+  ['蓝牙连接步骤', 'Bluetooth connection step'],
+  ['正在打开 Sivy 设备选择器', 'Opening the Sivy device picker'],
+  ['浏览器选择器中，请选择名称以 Sivy 开头的设备', 'In the browser picker, select the device whose name starts with Sivy'],
+  ['浏览器不提供蓝牙 MAC 地址，选择时请核对目标地址', 'Browsers do not expose the Bluetooth MAC address; verify the target address in the picker'],
+  ['当前连接不是 Sivy 设备', 'The current connection is not a Sivy device'],
+  ['正在执行 Sivy I²C 参考测试', 'Running the Sivy I²C reference test'],
+  ['参考测试完成', 'Reference test completed'],
+  ['数值不匹配，按流程继续', 'Value mismatches found; continuing as configured'],
+  ['I²C 通信错误，流程已停止', 'I²C communication errors found; workflow stopped'],
+  ['参考表不一致，流程已停止', 'Reference table mismatch; workflow stopped'],
+  ['测试结果不完整，流程已停止', 'Incomplete test results; workflow stopped'],
+  ['正在配置 CH0', 'Configuring CH0'],
+  ['阈值 32 mV，准备掩码写入', 'Threshold is 32 mV; preparing masked writes'],
+  ['CH0 已写入并回读校验通过', 'CH0 writes and readback verification passed'],
+  ['CH0 回读校验失败，流程已停止', 'CH0 readback verification failed; workflow stopped'],
+  ['后续步骤已锁定', 'Remaining steps are blocked'],
+  ['已完成全部自动步骤，可以查看下方波形', 'All automated steps completed; review the waveform below'],
+  ['连接数据源失败', 'Unable to connect data source'],
+  ['外部示波器数据源已连接', 'External oscilloscope data source connected'],
+  ['外部示波器数据源已断开', 'External oscilloscope data source disconnected'],
+  ['外部示波器数据格式无效', 'Invalid external oscilloscope data format'],
+  ['收到波形帧', 'Waveform frame received'],
+  ['收到示波器截图', 'Oscilloscope screenshot received'],
+  ['等待外部示波器数据', 'Waiting for external oscilloscope data'],
+  ['正在显示 ASC BLE 实时采样', 'Showing ASC BLE live samples'],
+  ['尚无波形数据', 'No waveform data yet'],
+  ['数据源地址必须使用 ws:// 或 wss://', 'The data-source URL must use ws:// or wss://'],
+  ['固定 MAC 地址无法由网页直接校验', 'The web page cannot directly verify the fixed MAC address'],
+  ['设备名称', 'Device name'], ['设备标识', 'Device ID'], ['匹配', 'match'], ['不匹配', 'mismatch'],
+  ['I²C 错误', 'I²C errors'], ['自动流程', 'Automated workflow'], ['配置 CH0', 'Configure CH0'],
   ['正在读取频率相关寄存器并反解位域', 'Reading frequency-related registers and decoding bitfields'],
   ['正在按安全顺序写入时钟与频率位域', 'Writing clock and frequency bitfields in source-safe order'],
   ['全部频率相关寄存器均已写入并回读校验通过。', 'All frequency-related registers passed write and readback verification.'],
@@ -563,13 +667,24 @@ function setConnected(connected) {
     'frequencyExportBtn',
     'powerClearBtn',
     'powerExportBtn',
+    'scopeSourceOption',
+    'scopeStreamUrl',
+    'scopeConnectBtn',
+    'scopeClearBtn',
+    'scopeFullscreenBtn',
+    'generatorApplyBtn',
+    'generatorReadBtn',
+    'generatorOutputOffBtn',
   ]);
   for (const button of document.querySelectorAll('button')) {
+    if (button.id === 'autoRunBtn') continue;
     if (button.id !== 'connectBtn') {
       button.disabled = !connected && !alwaysEnabled.has(button.id);
     }
   }
   $('connectBtn').disabled = connected || !state.bluetoothReady;
+  syncAutomationControls();
+  syncScopeControls();
 }
 
 function setRuntimeItem(id, value, level = 'ok') {
@@ -743,6 +858,26 @@ function describeDeviceFilter() {
   if (mode === 'ascService') return `目标服务/名称（${UUIDS.ascService}、SMP、${getDeviceNamePrefix()}）`;
   if (mode === 'allDevices') return '附近的全部蓝牙设备';
   return `名称前缀“${getDeviceNamePrefix()}”`;
+}
+
+function isSivyDeviceName(name) {
+  return typeof name === 'string' && name.startsWith(AUTOMATION_DEVICE_NAME_PREFIX);
+}
+
+function exposedBluetoothAddress(device) {
+  const addressPattern = /^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i;
+  return [device?.id, device?.name].find((value) => addressPattern.test(String(value || ''))) || null;
+}
+
+function normalizeBluetoothAddress(address) {
+  return String(address || '').replace(/[:-]/g, '').toUpperCase();
+}
+
+function buildAutomationBluetoothRequestOptions() {
+  return {
+    filters: [{ namePrefix: AUTOMATION_DEVICE_NAME_PREFIX }],
+    optionalServices: [UUIDS.ascService, UUIDS.smpService],
+  };
 }
 
 function updateDeviceFilterUi() {
@@ -996,7 +1131,7 @@ function updateStatus(status) {
   $('bleDropValue').textContent = `${status.bleCongested}/${status.sampleDrop}`;
 }
 
-async function connect() {
+async function connect({ requestOptions = null, requireSivyName = false } = {}) {
   if (!state.bluetoothReady) {
     throw new Error('网页蓝牙需要使用桌面版 Chrome/Edge 的 HTTPS 或本地主机页面');
   }
@@ -1009,9 +1144,22 @@ async function connect() {
     throw new Error('当前浏览器不支持网页蓝牙，请使用 Android Chrome/Edge/Samsung Internet 或桌面版 Chrome/Edge');
   }
 
-  log(`正在打开蓝牙设备选择器：${describeDeviceFilter()}`);
-  log('如果目标设备不出现：先确认手机/nRF Connect 已断开，再保持“全部设备”模式重新点击连接。');
-  const device = await navigator.bluetooth.requestDevice(buildBluetoothRequestOptions());
+  log(`正在打开蓝牙设备选择器：${requestOptions ? `名称前缀“${AUTOMATION_DEVICE_NAME_PREFIX}”` : describeDeviceFilter()}`);
+  if (requireSivyName) {
+    log(`浏览器选择器中，请选择名称以 ${AUTOMATION_DEVICE_NAME_PREFIX} 开头的设备；浏览器不提供蓝牙 MAC 地址，选择时请核对目标地址 ${AUTOMATION_TARGET_ADDRESS}。`);
+  } else {
+    log('如果目标设备不出现：先确认手机/nRF Connect 已断开，再保持“全部设备”模式重新点击连接。');
+  }
+  const device = await navigator.bluetooth.requestDevice(requestOptions || buildBluetoothRequestOptions());
+  if (requireSivyName && !isSivyDeviceName(device.name)) {
+    throw new Error(`当前连接不是 Sivy 设备：${device.name || '未命名设备'}。请重新选择名称以 Sivy 开头的目标板。`);
+  }
+  if (requireSivyName) {
+    const exposedAddress = exposedBluetoothAddress(device);
+    if (exposedAddress && normalizeBluetoothAddress(exposedAddress) !== normalizeBluetoothAddress(AUTOMATION_TARGET_ADDRESS)) {
+      throw new Error(`所选设备地址 ${exposedAddress} 与目标地址 ${AUTOMATION_TARGET_ADDRESS} 不一致`);
+    }
+  }
   log(`已选择蓝牙设备：${device.name || '未命名'} / ${device.id || '无标识'}`);
 
   device.addEventListener('gattserverdisconnected', onDisconnected);
@@ -1033,21 +1181,10 @@ async function connect() {
   state.chars.regRsp = await ascService.getCharacteristic(UUIDS.regRsp);
   state.chars.sivyTestCtrl = await ascService.getCharacteristic(UUIDS.sivyTestCtrl);
   state.chars.sivyTestResult = await ascService.getCharacteristic(UUIDS.sivyTestResult);
-  state.chars.adcData = await ascService.getCharacteristic(UUIDS.adcData);
 
   await state.chars.status.startNotifications();
   state.chars.status.addEventListener('characteristicvaluechanged', (event) => {
     updateStatus(parseStatus(event.target.value));
-  });
-
-  await state.chars.adcData.startNotifications();
-  state.chars.adcData.addEventListener('characteristicvaluechanged', (event) => {
-    const sample = parseSample(event.target.value);
-    state.samples.push(sample);
-    if (state.samples.length > 480) state.samples.shift();
-    $('sampleCount').textContent = `${state.samples.length} 个采样`;
-    $('latestSample').textContent = describeSample(sample);
-    drawSamples();
   });
 
   await state.chars.regRsp.startNotifications();
@@ -1075,6 +1212,7 @@ async function connect() {
   log(`已连接到 ${device.name || device.id || '未命名蓝牙设备'}`);
   await readConfig();
   await readStatus();
+  return device;
 }
 
 function onDisconnected() {
@@ -1083,6 +1221,11 @@ function onDisconnected() {
   state.chars = {};
   state.smp = null;
   state.sivyTestActiveSeq = null;
+  if (state.sivyTestCompletion) {
+    clearTimeout(state.sivyTestCompletion.timer);
+    state.sivyTestCompletion.reject(new Error('设备已断开连接'));
+    state.sivyTestCompletion = null;
+  }
   for (const pending of state.pendingReg.values()) {
     pending.reject(new Error('设备已断开连接'));
   }
@@ -1093,6 +1236,933 @@ function onDisconnected() {
 async function disconnect() {
   if (state.device?.gatt?.connected) {
     state.device.gatt.disconnect();
+  }
+}
+
+function setAutoStep(step, level, statusText, detailText = null) {
+  const element = $(`autoStep${step[0].toUpperCase()}${step.slice(1)}`);
+  if (!element) return;
+  element.classList.remove('pending', 'running', 'pass', 'warn', 'fail');
+  element.classList.add(level);
+  const status = $(`auto${step[0].toUpperCase()}${step.slice(1)}Status`);
+  if (status) {
+    status.textContent = statusText;
+    status.classList.remove('pending', 'running', 'pass', 'warn', 'fail', 'blocked');
+    status.classList.add(level);
+  }
+  const detail = $(`auto${step[0].toUpperCase()}${step.slice(1)}Detail`);
+  if (detail && detailText !== null) detail.textContent = detailText;
+}
+
+function setAutoOverall(level, text) {
+  const status = $('autoOverallStatus');
+  status.textContent = text;
+  status.classList.remove('idle', 'running', 'pass', 'warn', 'fail');
+  status.classList.add(level);
+}
+
+function resetAutomationUi() {
+  $('autoProgress').value = 0;
+  setAutoStep('connect', 'pending', '待执行', `名称以 Sivy 开头；目标地址 ${AUTOMATION_TARGET_ADDRESS}`);
+  setAutoStep('iic', 'pending', '等待上一步', '仅数值不匹配时给出警告并继续；I²C 通信错误会中止流程。');
+  setAutoStep('ch0', 'pending', '等待上一步', '勾选可写位确认，设置阈值 32 mV，执行掩码写入和四项寄存器回读。');
+  setAutoOverall('idle', '待执行。蓝牙连接、测试结果和 CH0 回读会依次显示在这里。');
+}
+
+function syncAutomationControls() {
+  const button = $('autoRunBtn');
+  if (!button) return;
+  button.disabled = !state.bluetoothReady || state.autoTest.running;
+  button.textContent = state.autoTest.running
+    ? '自动执行中…'
+    : state.device?.gatt?.connected
+      ? '重新执行自动测试'
+      : '一键连接并测试';
+}
+
+function blockAutoStepsAfter(step) {
+  const order = ['connect', 'iic', 'ch0'];
+  const start = order.indexOf(step);
+  for (let i = start + 1; i < order.length; i += 1) {
+    setAutoStep(order[i], 'pending', '已锁定', '前序步骤未完成，本步骤未执行。');
+    const status = $(`auto${order[i][0].toUpperCase()}${order[i].slice(1)}Status`);
+    status?.classList.add('blocked');
+  }
+}
+
+async function runAutomatedWorkflow() {
+  if (state.autoTest.running) return;
+  if (!state.bluetoothReady) {
+    throw new Error('网页蓝牙不可用：请通过 HTTPS 或 localhost 使用 Chrome/Edge 打开页面');
+  }
+
+  state.autoTest.running = true;
+  state.autoTest.currentStep = 'connect';
+  resetAutomationUi();
+  syncAutomationControls();
+  setAutoOverall('running', '自动测试正在执行：连接设备并校验目标名称。');
+  log('自动测试已开始：Sivy 蓝牙连接 → I²C 参考测试 → CH0 32 mV 配置。');
+  let iicHadValueDifferences = false;
+
+  try {
+    setAutoStep('connect', 'running', '连接中', '正在打开 Sivy 设备选择器；请在浏览器窗口中点选目标板。');
+    let device = state.device;
+    if (!device?.gatt?.connected) {
+      device = await connect({
+        requestOptions: buildAutomationBluetoothRequestOptions(),
+        requireSivyName: true,
+      });
+    } else if (!isSivyDeviceName(device.name)) {
+      log(`当前连接设备“${device.name || '未命名'}”不是 Sivy，自动断开后重新选择。`);
+      await disconnect();
+      await delay(250);
+      device = await connect({
+        requestOptions: buildAutomationBluetoothRequestOptions(),
+        requireSivyName: true,
+      });
+    }
+    $('autoProgress').value = 1;
+    const exposedAddress = exposedBluetoothAddress(device);
+    setAutoStep(
+      'connect',
+      'pass',
+      '已连接',
+      exposedAddress
+        ? `设备：${device.name || 'Sivy'}；浏览器提供地址 ${exposedAddress}，已与目标地址匹配。`
+        : `设备：${device.name || 'Sivy'}；浏览器未提供 MAC 地址，选择器中需自行核对 ${AUTOMATION_TARGET_ADDRESS}。`,
+    );
+    setAutoOverall('running', '蓝牙连接完成。正在执行 Sivy I²C 29 项参考测试。');
+
+    state.autoTest.currentStep = 'iic';
+    setAutoStep('iic', 'running', '测试中', '正在等待固件逐项回传 29 个寄存器结果和最终汇总。');
+    const sivyResult = await runSivySnapshot();
+    if (sivyResult.totalCount !== SIVY_REGISTER_EXPECTED.size) {
+      throw new Error(`测试结果不完整：收到 ${sivyResult.totalCount}/${SIVY_REGISTER_EXPECTED.size} 项`);
+    }
+    if (sivyResult.ioErrorCount > 0 || sivyResult.status === SIVY_TEST.IO_ERROR) {
+      throw new Error(`I²C 通信错误 ${sivyResult.ioErrorCount} 项，不能进入 CH0 配置`);
+    }
+    if (sivyResult.referenceOutOfSync) {
+      throw new Error('固件参考表与网页参考表不一致，不能把该差异视为单纯的测试数值差异');
+    }
+
+    $('autoProgress').value = 2;
+    if (sivyResult.mismatchCount > 0 || sivyResult.status !== SIVY_TEST.PASS) {
+      iicHadValueDifferences = true;
+      setAutoStep(
+        'iic',
+        'warn',
+        '数值差异，已继续',
+        `匹配 ${sivyResult.matchCount} 项，数值不匹配 ${sivyResult.mismatchCount} 项，I²C 错误 0 项；按规则继续 CH0。`,
+      );
+      setAutoOverall('warn', 'I²C 参考测试只有数值差异，已按设定继续。正在配置 CH0 32 mV。');
+    } else {
+      setAutoStep('iic', 'pass', '通过', `29 项寄存器全部匹配，I²C 错误 0 项。`);
+      setAutoOverall('running', 'I²C 参考测试通过。正在配置 CH0 32 mV。');
+    }
+
+    state.autoTest.currentStep = 'ch0';
+    $('ch0VthMv').value = '32';
+    $('ch0WriteConfirm').checked = true;
+    $('ch0PowerOn').checked = true;
+    renderChannelRegisterPlan(0);
+    setAutoStep('ch0', 'running', '写入中', '阈值 32 mV，确认位已勾选；正在写入 CH0 四项寄存器并回读。');
+    const channelResult = await writeChannelRegisters(0);
+    if (!channelResult?.submitted || channelResult.ioErrors > 0 || channelResult.mismatches > 0) {
+      const ioErrors = channelResult?.ioErrors ?? 0;
+      const mismatches = channelResult?.mismatches ?? 0;
+      throw new Error(`CH0 写入或回读校验失败：I/O 错误 ${ioErrors} 项，位域不匹配 ${mismatches} 项`);
+    }
+
+    $('autoProgress').value = 3;
+    setAutoStep('ch0', 'pass', '通过', 'CH0_CTRL、FEAT、WORKWIN、WAITWIN 已写入，可写位回读全部通过。');
+    setAutoOverall(
+      iicHadValueDifferences ? 'warn' : 'pass',
+      `${iicHadValueDifferences ? '自动测试已完成，但 I²C 存在数值差异。' : '自动测试已完成：'}Sivy 已连接，CH0 阈值 32 mV 写入并回读通过。可以查看下方实时波形。`,
+    );
+    log(`自动测试已完成${iicHadValueDifferences ? '（I²C 有数值差异）' : ''}：Sivy 已连接，CH0 32 mV 写入并回读通过。`);
+  } catch (error) {
+    const step = state.autoTest.currentStep || 'connect';
+    const friendly = webBluetoothHint(error);
+    setAutoStep(step, 'fail', '失败', friendly);
+    blockAutoStepsAfter(step);
+    setAutoOverall('fail', `自动测试已中止：${friendly}`);
+    log(`自动测试已中止（${step}）：${friendly}`);
+  } finally {
+    state.autoTest.running = false;
+    state.autoTest.currentStep = null;
+    syncAutomationControls();
+  }
+}
+
+function setScopeStatus(text, level = 'pending') {
+  const status = $('scopeConnectionStatus');
+  status.textContent = text;
+  status.classList.remove('pending', 'running', 'pass', 'warn', 'fail', 'blocked');
+  status.classList.add(level);
+}
+
+function normalizedScopeIp() {
+  const value = $('scopeInstrumentIp').value.trim();
+  const parts = value.split('.');
+  const valid = parts.length === 4 && parts.every((part) => (
+    /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255
+  ));
+  if (!valid) throw new Error('请输入有效的示波器 IPv4 地址');
+  return parts.map((part) => String(Number(part))).join('.');
+}
+
+function restoreScopeSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SCOPE_SETTINGS_STORAGE_KEY) || '{}');
+    if (saved.ip) $('scopeInstrumentIp').value = saved.ip;
+    if (saved.intervalMs) $('scopeRefreshInterval').value = String(saved.intervalMs);
+    if (saved.bridgeUrl) {
+      const bridgeUrl = new URL(saved.bridgeUrl);
+      if (bridgeUrl.pathname === '/scope' || bridgeUrl.pathname === '/video') {
+        bridgeUrl.pathname = '/';
+      }
+      $('scopeStreamUrl').value = bridgeUrl.href.replace(/\/$/, '');
+    }
+    $('scopeAccessKey').value = sessionStorage.getItem(SCOPE_ACCESS_KEY_STORAGE_KEY) || '';
+  } catch (_) {
+    $('scopeInstrumentIp').value = DEFAULT_SCOPE_IP;
+    $('scopeStreamUrl').value = DEFAULT_SCOPE_BRIDGE_URL.replace(/\/scope$/, '');
+  }
+}
+
+function saveScopeSettings() {
+  try {
+    localStorage.setItem(SCOPE_SETTINGS_STORAGE_KEY, JSON.stringify({
+      ip: $('scopeInstrumentIp').value.trim(),
+      intervalMs: Number($('scopeRefreshInterval').value),
+      bridgeUrl: $('scopeStreamUrl').value.trim(),
+    }));
+    sessionStorage.setItem(SCOPE_ACCESS_KEY_STORAGE_KEY, $('scopeAccessKey').value);
+  } catch (_) {
+    // Local storage can be disabled; the current form values still work.
+  }
+}
+
+function syncScopeControls() {
+  const external = state.scope.source === 'video' || state.scope.source === 'websocket';
+  const socketReady = state.scope.socket
+    && (state.scope.socket.readyState === WebSocket.OPEN || state.scope.socket.readyState === WebSocket.CONNECTING);
+  const videoMode = state.scope.source === 'video';
+  const sourceOption = $('scopeSourceOption');
+  if (!sourceOption) return;
+
+  $('scopeInstrumentIp').disabled = Boolean(socketReady);
+  $('scopeAccessKey').disabled = Boolean(socketReady);
+  $('scopeRefreshInterval').disabled = Boolean(socketReady) || videoMode;
+  $('scopeRefreshLabel').classList.toggle('muted-control', videoMode);
+  $('scopeStreamUrl').disabled = Boolean(socketReady);
+  $('scopeConnectBtn').disabled = !external;
+  $('scopeSourceLabel').textContent = external
+    ? `数据源：RIGOL MHO 5054 · ${$('scopeInstrumentIp').value.trim() || DEFAULT_SCOPE_IP}`
+    : '数据源：ASC BLE ADC';
+
+  if (!external) {
+    $('scopeConnectBtn').textContent = '连接示波器';
+    setScopeStatus('RIGOL 待连接', 'pending');
+    return;
+  }
+
+  if (socketReady) {
+    $('scopeConnectBtn').textContent = '断开示波器';
+    if (state.scope.socket.readyState === WebSocket.OPEN) {
+      setScopeStatus('示波器在线', 'pass');
+    } else {
+      setScopeStatus('连接中', 'running');
+    }
+  } else {
+    $('scopeConnectBtn').textContent = '连接示波器';
+    setScopeStatus('RIGOL 待连接', 'pending');
+  }
+}
+
+function updateScopeBleStatus() {
+  if (state.scope.source !== 'ble') return;
+  if (!state.device?.gatt?.connected) {
+    setScopeStatus('BLE 待连接', 'pending');
+    $('scopeFrameInfo').textContent = '尚无数据帧';
+    return;
+  }
+  const count = state.samples.length;
+  setScopeStatus(count > 0 ? `${count} 个采样 · 实时` : 'BLE 已连接 · 等待采样', count > 0 ? 'pass' : 'running');
+  $('scopeFrameInfo').textContent = count > 0
+    ? `ASC BLE 最近 ${Math.min(300, count)} 个采样`
+    : 'BLE 已连接，等待 ADC_DATA';
+}
+
+function setScopeSource(source) {
+  if (source !== 'video' && source !== 'websocket') return;
+  if (state.scope.socket) disconnectScopeStream();
+  closeVideoDecoder();
+  state.scope.source = source;
+  state.scope.frame = null;
+  state.scope.screenshot = null;
+  state.scope.frameCount = 0;
+  $('scopeFrameInfo').textContent = '尚无数据帧';
+  setScopeStatus('RIGOL 待连接', 'pending');
+  syncScopeControls();
+  drawScopeMonitor();
+}
+
+function disconnectScopeStream() {
+  const socket = state.scope.socket;
+  state.scope.socket = null;
+  if (socket && socket.readyState < WebSocket.CLOSING) {
+    socket.close(1000, 'User disconnected');
+  }
+  state.scope.frame = null;
+  state.scope.screenshot = null;
+  state.scope.frameCount = 0;
+  closeVideoDecoder();
+  $('scopeFrameInfo').textContent = '尚无数据帧';
+  setScopeStatus('示波器已断开', 'pending');
+  drawScopeMonitor();
+  syncScopeControls();
+  log('外部示波器数据源已断开');
+}
+
+async function connectScopeStream() {
+  if (state.scope.socket) {
+    disconnectScopeStream();
+    return;
+  }
+  if (state.scope.source !== 'video' && state.scope.source !== 'websocket') return;
+
+  const source = $('scopeStreamUrl').value.trim();
+  let url;
+  try {
+    url = new URL(source);
+  } catch (_) {
+    throw new Error('请填写有效的外部示波器 WebSocket 数据地址');
+  }
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+    throw new Error('数据源地址必须使用 ws:// 或 wss://');
+  }
+
+  const scopeIp = normalizedScopeIp();
+  const intervalMs = Number($('scopeRefreshInterval').value);
+  url.pathname = state.scope.source === 'video' ? '/video' : '/scope';
+  url.search = state.scope.source === 'video' ? `?ip=${encodeURIComponent(scopeIp)}` : '';
+  const accessKey = $('scopeAccessKey').value;
+  if (accessKey) url.searchParams.set('key', accessKey);
+  saveScopeSettings();
+  const socket = new WebSocket(url.href);
+  if (state.scope.source === 'video') socket.binaryType = 'arraybuffer';
+  state.scope.socket = socket;
+  state.scope.frame = null;
+  state.scope.screenshot = null;
+  state.scope.frameCount = 0;
+  closeVideoDecoder();
+  state.scope.videoFrameCount = 0;
+  state.scope.videoFpsCounter = { startedAt: performance.now(), frames: 0, fps: 0 };
+  setScopeStatus('连接中', 'running');
+  syncScopeControls();
+  let socketOpened = false;
+
+  socket.addEventListener('open', () => {
+    if (state.scope.socket !== socket) return;
+    socketOpened = true;
+    if (state.scope.source === 'video') {
+      setScopeStatus('等待 H.264 视频流', 'running');
+      log(`高帧率视频桥已连接：RIGOL MHO 5054 / ${scopeIp}:9001`);
+    } else {
+      socket.send(JSON.stringify({
+        type: 'configure',
+        ip: scopeIp,
+        port: DEFAULT_SCOPE_PORT,
+        intervalMs,
+        mode: 'screenshot',
+      }));
+      setScopeStatus('等待示波器响应', 'running');
+      log(`示波器截图桥已连接：RIGOL MHO 5054 / ${scopeIp}:${DEFAULT_SCOPE_PORT}，刷新间隔 ${intervalMs} ms`);
+    }
+    syncScopeControls();
+  });
+  socket.addEventListener('message', (event) => {
+    if (state.scope.socket !== socket) return;
+    if (state.scope.source === 'video') {
+      void handleScopeVideoMessage(event.data).catch((error) => {
+        setScopeStatus('视频数据错误', 'fail');
+        log(`RIGOL H.264 数据错误：${error.message}`);
+      });
+    } else {
+      void handleScopeStreamMessage(event.data).catch((error) => {
+        setScopeStatus('数据格式错误', 'fail');
+        log(`外部示波器数据格式无效：${error.message}`);
+      });
+    }
+  });
+  socket.addEventListener('error', () => {
+    if (state.scope.socket !== socket) return;
+    setScopeStatus('连接失败', 'fail');
+    log(`连接示波器失败：请确认数据桥已启动，访问密钥、示波器 IP 和网络配置正确（${scopeIp}）`);
+  });
+  socket.addEventListener('close', () => {
+    if (state.scope.socket !== socket) return;
+    state.scope.socket = null;
+    closeVideoDecoder();
+    syncScopeControls();
+    if (!socketOpened) {
+      setScopeStatus('连接失败 · 请检查数据桥和访问密钥', 'fail');
+    } else {
+      setScopeStatus('示波器已断开', 'pending');
+    }
+  });
+}
+
+async function handleScopeStreamMessage(data) {
+  let text;
+  if (typeof data === 'string') {
+    text = data;
+  } else if (data instanceof Blob) {
+    text = await data.text();
+  } else if (data instanceof ArrayBuffer) {
+    text = new TextDecoder().decode(data);
+  } else {
+    throw new Error('外部示波器数据格式无效：仅支持 JSON 文本消息');
+  }
+
+  let message;
+  try {
+    message = JSON.parse(text);
+  } catch (_) {
+    throw new Error('外部示波器数据格式无效：消息不是 JSON');
+  }
+  if (!message || typeof message !== 'object') {
+    throw new Error('外部示波器数据格式无效：消息必须为对象');
+  }
+
+  if (message.type === 'status') {
+    if (message.state === 'error') {
+      setScopeStatus('示波器连接失败', 'fail');
+      $('scopeFrameInfo').textContent = String(message.message || '无法读取示波器画面');
+      log(`RIGOL MHO 5054 读取失败：${message.message || '未知错误'}`);
+    } else if (message.state === 'configured') {
+      setScopeStatus('等待示波器画面', 'running');
+    } else {
+      setScopeStatus('正在连接示波器', 'running');
+    }
+    return;
+  }
+
+  if (message.type === 'waveform') {
+    const channels = normalizeScopeChannels(message);
+    state.scope.frame = message;
+    state.scope.screenshot = null;
+    state.scope.frameCount += 1;
+    $('scopeFrameInfo').textContent = `波形帧 ${state.scope.frameCount} · ${channels.length} 通道`;
+    setScopeStatus('示波器在线 · 实时', 'pass');
+    drawScopeMonitor();
+    return;
+  }
+
+  if (message.type === 'screenshot') {
+    const dataUrl = typeof message.dataUrl === 'string'
+      ? message.dataUrl
+      : typeof message.data === 'string'
+        ? (message.data.startsWith('data:')
+          ? message.data
+          : `data:${message.mimeType || 'image/png'};base64,${message.data}`)
+        : '';
+    if (!dataUrl.startsWith('data:image/')) {
+      throw new Error('外部示波器截图格式无效：dataUrl 必须为 image/* data URL');
+    }
+    const image = new Image();
+    image.addEventListener('load', () => {
+      state.scope.screenshot = image;
+      state.scope.frame = null;
+      state.scope.frameCount += 1;
+      const captureTime = Number(message.capturedAt);
+      const timeLabel = Number.isFinite(captureTime)
+        ? new Date(captureTime * 1000).toLocaleTimeString()
+        : '';
+      $('scopeFrameInfo').textContent =
+        `截图帧 ${state.scope.frameCount} · ${image.naturalWidth}×${image.naturalHeight}${timeLabel ? ` · ${timeLabel}` : ''}`;
+      setScopeStatus('示波器在线 · 实时截图', 'pass');
+      drawScopeMonitor();
+    });
+    image.addEventListener('error', () => log('收到示波器截图，但图像解码失败'));
+    image.src = dataUrl;
+  }
+}
+
+function closeVideoDecoder() {
+  state.scope.videoGeneration += 1;
+  state.scope.videoQueue = [];
+  state.scope.videoParameterBytes = null;
+  state.scope.videoPumping = false;
+  if (state.scope.videoFrameRequest) {
+    cancelAnimationFrame(state.scope.videoFrameRequest);
+    state.scope.videoFrameRequest = 0;
+  }
+  try {
+    state.scope.pendingVideoFrame?.close();
+  } catch (_) {
+    // A newly closed VideoFrame can be released by the browser first.
+  }
+  state.scope.pendingVideoFrame = null;
+  try {
+    if (state.scope.videoDecoder?.state !== 'closed') {
+      state.scope.videoDecoder?.close();
+    }
+  } catch (_) {
+    // Ignore decoder cleanup after a transport failure.
+  }
+  state.scope.videoDecoder = null;
+}
+
+function h264NalInfo(bytes) {
+  const nals = [];
+  for (let index = 0; index + 3 < bytes.length; index += 1) {
+    let headerIndex = -1;
+    if (bytes[index] === 0 && bytes[index + 1] === 0 && bytes[index + 2] === 1) {
+      headerIndex = index + 3;
+    } else if (
+      bytes[index] === 0
+      && bytes[index + 1] === 0
+      && bytes[index + 2] === 0
+      && bytes[index + 3] === 1
+    ) {
+      headerIndex = index + 4;
+    }
+    if (headerIndex >= 0) {
+      nals.push({ start: index, header: headerIndex, type: bytes[headerIndex] & 0x1f });
+      index = headerIndex;
+    }
+  }
+  return nals;
+}
+
+function h264Codec(bytes) {
+  const sps = h264NalInfo(bytes).find((nal) => nal.type === 7);
+  if (!sps || sps.header + 3 >= bytes.length) return '';
+  const byteHex = (value) => value.toString(16).padStart(2, '0');
+  return `avc1.${byteHex(bytes[sps.header + 1])}${byteHex(bytes[sps.header + 2])}${byteHex(bytes[sps.header + 3])}`;
+}
+
+function drawVideoFrame(frame) {
+  const layout = prepareScopeCanvas();
+  scopeCtx.fillStyle = '#0d1726';
+  scopeCtx.fillRect(0, 0, layout.width, layout.height);
+  const scale = Math.min(layout.width / frame.displayWidth, layout.height / frame.displayHeight);
+  const width = frame.displayWidth * scale;
+  const height = frame.displayHeight * scale;
+  scopeCtx.drawImage(frame, (layout.width - width) / 2, (layout.height - height) / 2, width, height);
+  $('scopeEmpty').classList.add('hidden');
+}
+
+function renderVideoFrame() {
+  state.scope.videoFrameRequest = 0;
+  const frame = state.scope.pendingVideoFrame;
+  if (!frame) return;
+  state.scope.pendingVideoFrame = null;
+  try {
+    drawVideoFrame(frame);
+  } finally {
+    frame.close();
+  }
+}
+
+async function configureVideoDecoder(bytes, generation) {
+  if (typeof VideoDecoder !== 'function' || typeof EncodedVideoChunk !== 'function') {
+    throw new Error('当前浏览器不支持 H.264 WebCodecs，请使用最新版 Chrome 或 Edge');
+  }
+  const codec = h264Codec(bytes);
+  if (!codec) throw new Error('没有从 RIGOL 视频流中识别到 H.264 SPS');
+  const config = { codec, optimizeForLatency: true };
+  const support = await VideoDecoder.isConfigSupported(config);
+  if (!support.supported) {
+    throw new Error(`当前浏览器不支持示波器视频编码 ${codec}`);
+  }
+  if (generation !== state.scope.videoGeneration) return false;
+  const decoder = new VideoDecoder({
+    output(frame) {
+      if (generation !== state.scope.videoGeneration) {
+        frame.close();
+        return;
+      }
+      try {
+        state.scope.pendingVideoFrame?.close();
+      } catch (_) {
+        // Replacing an unconsumed frame is normal at high input rates.
+      }
+      state.scope.pendingVideoFrame = frame;
+      if (!state.scope.videoFrameRequest) {
+        state.scope.videoFrameRequest = requestAnimationFrame(renderVideoFrame);
+      }
+      state.scope.videoFrameCount += 1;
+      if (state.scope.videoFrameCount === 1) {
+        setScopeStatus('示波器在线 · H.264 高帧率', 'pass');
+        $('scopeFrameInfo').textContent =
+          `H.264 第 1 帧 · ${frame.displayWidth}×${frame.displayHeight}`;
+      }
+      const counter = state.scope.videoFpsCounter;
+      counter.frames += 1;
+      const now = performance.now();
+      const elapsed = now - counter.startedAt;
+      if (elapsed >= 1000) {
+        counter.fps = counter.frames * 1000 / elapsed;
+        counter.frames = 0;
+        counter.startedAt = now;
+        $('scopeFrameInfo').textContent =
+          `H.264 ${state.scope.videoFrameCount} 帧 · ${frame.displayWidth}×${frame.displayHeight} · ${counter.fps.toFixed(1)} 帧/秒`;
+      }
+    },
+    error(error) {
+      if (generation !== state.scope.videoGeneration) return;
+      setScopeStatus('视频解码失败', 'fail');
+      log(`RIGOL H.264 解码失败：${error.message || error}`);
+    },
+  });
+  decoder.configure(config);
+  state.scope.videoDecoder = decoder;
+  return true;
+}
+
+async function pumpVideoFrames() {
+  if (state.scope.videoPumping) return;
+  state.scope.videoPumping = true;
+  const generation = state.scope.videoGeneration;
+  try {
+    while (state.scope.videoQueue.length > 0 && generation === state.scope.videoGeneration) {
+      const bytes = state.scope.videoQueue.shift();
+      const nals = h264NalInfo(bytes);
+      const hasIdr = nals.some((nal) => nal.type === 5);
+      const hasParameterSet = nals.some((nal) => nal.type === 7 || nal.type === 8);
+      if (!state.scope.videoDecoder) {
+        if (h264Codec(bytes)) {
+          const configured = await configureVideoDecoder(bytes, generation);
+          if (!configured || generation !== state.scope.videoGeneration) return;
+        }
+        if (!hasIdr) {
+          if (hasParameterSet) state.scope.videoParameterBytes = bytes;
+          continue;
+        }
+      }
+      if (!hasIdr && !state.scope.videoFrameCount) continue;
+      const payload = hasIdr && state.scope.videoParameterBytes
+        ? concatBytes(state.scope.videoParameterBytes, bytes)
+        : bytes;
+      state.scope.videoDecoder.decode(new EncodedVideoChunk({
+        type: hasIdr ? 'key' : 'delta',
+        timestamp: Math.round(performance.now() * 1000),
+        data: payload,
+      }));
+      if (hasIdr) state.scope.videoParameterBytes = null;
+    }
+  } catch (error) {
+    setScopeStatus('视频解码失败', 'fail');
+    log(`RIGOL H.264 解码失败：${error.message}`);
+  } finally {
+    if (generation === state.scope.videoGeneration) {
+      state.scope.videoPumping = false;
+      if (state.scope.videoQueue.length > 0) {
+        void pumpVideoFrames();
+      }
+    }
+  }
+}
+
+async function handleScopeVideoMessage(data) {
+  if (typeof data === 'string') {
+    try {
+      const message = JSON.parse(data);
+      if (message.type === 'status' && message.state === 'error') {
+        setScopeStatus('示波器连接失败', 'fail');
+        $('scopeFrameInfo').textContent = String(message.message || '无法读取 RIGOL 视频流');
+        log(`RIGOL 视频流失败：${message.message || '未知错误'}`);
+      } else if (message.action === 'init') {
+        setScopeStatus('已接收视频流 · 解码中', 'running');
+      }
+    } catch (_) {
+      // Ignore unrelated control text from the RIGOL stream.
+    }
+    return;
+  }
+  const buffer = data instanceof Blob ? await data.arrayBuffer() : data;
+  if (!(buffer instanceof ArrayBuffer)) return;
+  state.scope.videoQueue.push(new Uint8Array(buffer));
+  void pumpVideoFrames();
+}
+
+function clearScopeMonitor() {
+  if (state.scope.source === 'ble') {
+    state.samples = [];
+    $('sampleCount').textContent = '0 个采样';
+    $('latestSample').textContent = '最新值：--';
+    drawSamples();
+  }
+  state.scope.frame = null;
+  state.scope.screenshot = null;
+  state.scope.frameCount = 0;
+  $('scopeFrameInfo').textContent = '尚无数据帧';
+  if (state.scope.source === 'ble') updateScopeBleStatus();
+  drawScopeMonitor();
+}
+
+async function toggleScopeStream() {
+  if (state.scope.socket) {
+    disconnectScopeStream();
+  } else {
+    await connectScopeStream();
+  }
+}
+
+async function toggleScopeFullscreen() {
+  const stage = $('scopeStage');
+  try {
+    if (document.fullscreenElement === stage) {
+      await document.exitFullscreen();
+    } else {
+      await stage.requestFullscreen();
+    }
+  } catch (error) {
+    log(`无法切换全屏：${error.message}`);
+  }
+}
+
+function updateScopeFullscreenButton() {
+  const fullscreen = document.fullscreenElement === $('scopeStage');
+  $('scopeFullscreenBtn').textContent = fullscreen ? '退出全屏' : '全屏显示';
+  requestAnimationFrame(drawScopeMonitor);
+}
+
+function setGeneratorStatus(text, level = 'pending') {
+  const status = $('generatorStatus');
+  status.textContent = text;
+  status.classList.remove('pending', 'running', 'pass', 'warn', 'fail', 'blocked');
+  status.classList.add(level);
+}
+
+function generatorWaveformLabel(waveform) {
+  return {
+    triangle: '三角波',
+    sine: '正弦波',
+    square: '方波',
+    pulse: '脉冲',
+  }[waveform] || waveform;
+}
+
+function formatGeneratorFrequency(value) {
+  const frequency = Number(value);
+  if (!Number.isFinite(frequency)) return '--';
+  if (frequency >= 1_000_000) return `${(frequency / 1_000_000).toFixed(6).replace(/\.?0+$/, '')} MHz`;
+  if (frequency >= 1000) return `${(frequency / 1000).toFixed(6).replace(/\.?0+$/, '')} kHz`;
+  return `${frequency} Hz`;
+}
+
+function generatorFormConfig() {
+  const ipText = $('generatorIp').value.trim();
+  const octets = ipText.split('.');
+  if (
+    octets.length !== 4
+    || !octets.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+  ) {
+    throw new Error('请填写有效的 RIGOL DG4102 IPv4 地址');
+  }
+  const channel = Number($('generatorChannel').value);
+  const waveform = $('generatorWaveform').value;
+  const amplitudeVpp = Number($('generatorAmplitude').value);
+  const frequencyHz = Number($('generatorFrequency').value);
+  const load = $('generatorLoad').value;
+  if (![1, 2].includes(channel)) throw new Error('输出通道必须是 CH1 或 CH2');
+  if (!['triangle', 'sine', 'square', 'pulse'].includes(waveform)) throw new Error('请选择有效波形');
+  if (!Number.isFinite(amplitudeVpp) || amplitudeVpp < 0.001 || amplitudeVpp > 20) {
+    throw new Error('幅值必须在 0.001 到 20 Vpp 之间');
+  }
+  if (!Number.isFinite(frequencyHz) || frequencyHz < 0.001 || frequencyHz > 50_000_000) {
+    throw new Error('频率必须在 0.001 Hz 到 50 MHz 之间');
+  }
+  if (!['INF', '50'].includes(load)) throw new Error('请选择有效输出负载');
+  return {
+    ip: octets.map((part) => String(Number(part))).join('.'),
+    port: DEFAULT_GENERATOR_PORT,
+    channel,
+    waveform,
+    amplitudeVpp,
+    frequencyHz,
+    load,
+  };
+}
+
+function saveGeneratorSettings() {
+  try {
+    localStorage.setItem(GENERATOR_SETTINGS_STORAGE_KEY, JSON.stringify({
+      ip: $('generatorIp').value.trim(),
+      channel: $('generatorChannel').value,
+      waveform: $('generatorWaveform').value,
+      amplitudeVpp: $('generatorAmplitude').value,
+      frequencyHz: $('generatorFrequency').value,
+      load: $('generatorLoad').value,
+    }));
+  } catch (_) {
+    // The current form values remain usable when local storage is unavailable.
+  }
+}
+
+function restoreGeneratorSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GENERATOR_SETTINGS_STORAGE_KEY) || '{}');
+    if (saved.ip) $('generatorIp').value = saved.ip;
+    if (saved.channel) $('generatorChannel').value = String(saved.channel);
+    if (saved.waveform) $('generatorWaveform').value = saved.waveform;
+    if (saved.amplitudeVpp) $('generatorAmplitude').value = String(saved.amplitudeVpp);
+    if (saved.frequencyHz) $('generatorFrequency').value = String(saved.frequencyHz);
+    if (saved.load) $('generatorLoad').value = saved.load;
+  } catch (_) {
+    // Defaults are already present in the markup.
+  }
+}
+
+function renderGeneratorPreview() {
+  const channel = $('generatorChannel').value === '2' ? 'CH2' : 'CH1';
+  const waveform = generatorWaveformLabel($('generatorWaveform').value);
+  const amplitude = $('generatorAmplitude').value || '--';
+  const frequency = formatGeneratorFrequency($('generatorFrequency').value);
+  const load = $('generatorLoad').value === '50' ? '50 Ω' : '高阻';
+  $('generatorSummary').textContent =
+    `${channel} · ${waveform} · ${amplitude} Vpp · ${frequency} · ${load}；等待发送。`;
+  $('generatorSummary').classList.remove('running', 'pass', 'fail');
+  $('generatorSummary').classList.add('idle');
+}
+
+function sendGeneratorCommand(command) {
+  let bridgeUrl;
+  try {
+    bridgeUrl = new URL($('scopeStreamUrl').value.trim());
+  } catch (_) {
+    return Promise.reject(new Error('本机数据桥地址无效'));
+  }
+  if (bridgeUrl.protocol !== 'ws:' && bridgeUrl.protocol !== 'wss:') {
+    return Promise.reject(new Error('本机数据桥地址必须使用 ws:// 或 wss://'));
+  }
+  bridgeUrl.pathname = '/generator';
+  bridgeUrl.search = '';
+  const accessKey = $('scopeAccessKey').value;
+  if (accessKey) bridgeUrl.searchParams.set('key', accessKey);
+  const socket = new WebSocket(bridgeUrl.href);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        socket.close();
+      } catch (_) {
+        // The server may already have closed the socket.
+      }
+      callback(value);
+    };
+    const timer = setTimeout(() => finish(reject, new Error('信号发生器操作超时，请检查 IP 和网络')), 12000);
+    socket.addEventListener('open', () => socket.send(JSON.stringify(command)));
+    socket.addEventListener('message', (event) => {
+      try {
+        const message = JSON.parse(String(event.data));
+        if (message.type !== 'generator') return;
+        if (message.state === 'ok') finish(resolve, message);
+        else finish(reject, new Error(message.message || '信号发生器操作失败'));
+      } catch (error) {
+        finish(reject, error);
+      }
+    });
+    socket.addEventListener('error', () => finish(reject, new Error(
+      '无法连接信号发生器数据桥，请检查桥程序、数据桥地址和访问密钥',
+    )));
+    socket.addEventListener('close', () => {
+      if (!settled) finish(reject, new Error('信号发生器数据桥已断开'));
+    });
+  });
+}
+
+function describeGeneratorSettings(settings, channel) {
+  const waveform = {
+    SIN: '正弦波',
+    SQU: '方波',
+    RAMP: '三角波',
+    PULS: '脉冲',
+  }[settings.waveform] || settings.waveform;
+  const load = String(settings.load).toUpperCase().startsWith('INF') ? '高阻' : `${settings.load} Ω`;
+  return `CH${channel} · ${waveform} · ${Number(settings.amplitudeVpp).toFixed(3)} Vpp · ` +
+    `${formatGeneratorFrequency(settings.frequencyHz)} · ${load} · 输出 ${settings.output === 'ON' ? '已打开' : '已关闭'}`;
+}
+
+async function applyGenerator() {
+  const config = generatorFormConfig();
+  saveGeneratorSettings();
+  setGeneratorStatus('正在发送', 'running');
+  $('generatorSummary').textContent = `正在连接 ${config.ip}:${config.port} 并配置 CH${config.channel}…`;
+  $('generatorSummary').classList.remove('idle', 'pass', 'fail');
+  $('generatorSummary').classList.add('running');
+  try {
+    const response = await sendGeneratorCommand({ ...config, type: 'apply', output: true });
+    setGeneratorStatus('输出已打开', 'pass');
+    $('generatorSummary').textContent =
+      `已应用并回读：${describeGeneratorSettings(response.settings, config.channel)}`;
+    $('generatorSummary').classList.remove('running', 'fail');
+    $('generatorSummary').classList.add('pass');
+    log(`DG4102 配置成功：${response.settings.identity || config.ip}`);
+  } catch (error) {
+    setGeneratorStatus('发送失败', 'fail');
+    $('generatorSummary').textContent = `信号发生器配置失败：${error.message}`;
+    $('generatorSummary').classList.remove('running', 'pass');
+    $('generatorSummary').classList.add('fail');
+    log(`DG4102 配置失败：${error.message}`);
+  }
+}
+
+async function readGenerator() {
+  const config = generatorFormConfig();
+  setGeneratorStatus('正在读取', 'running');
+  try {
+    const response = await sendGeneratorCommand({ ...config, type: 'read' });
+    const settings = response.settings;
+    if (settings.waveform?.startsWith('SIN')) $('generatorWaveform').value = 'sine';
+    else if (settings.waveform?.startsWith('SQU')) $('generatorWaveform').value = 'square';
+    else if (settings.waveform?.startsWith('PULS')) $('generatorWaveform').value = 'pulse';
+    else if (settings.waveform?.startsWith('RAMP')) $('generatorWaveform').value = 'triangle';
+    $('generatorAmplitude').value = String(settings.amplitudeVpp);
+    $('generatorFrequency').value = String(settings.frequencyHz);
+    $('generatorLoad').value = String(settings.load).toUpperCase().startsWith('INF') ? 'INF' : '50';
+    setGeneratorStatus(settings.output === 'ON' ? '已连接 · 输出开' : '已连接 · 输出关', 'pass');
+    $('generatorSummary').textContent = `当前设置：${describeGeneratorSettings(settings, config.channel)}`;
+    $('generatorSummary').classList.remove('running', 'idle', 'fail');
+    $('generatorSummary').classList.add('pass');
+    saveGeneratorSettings();
+  } catch (error) {
+    setGeneratorStatus('读取失败', 'fail');
+    $('generatorSummary').textContent = `读取信号发生器失败：${error.message}`;
+    $('generatorSummary').classList.remove('running', 'pass');
+    $('generatorSummary').classList.add('fail');
+  }
+}
+
+async function disableGeneratorOutput() {
+  const config = generatorFormConfig();
+  setGeneratorStatus('正在关闭输出', 'running');
+  try {
+    const response = await sendGeneratorCommand({
+      type: 'output',
+      ip: config.ip,
+      port: config.port,
+      channel: config.channel,
+      enabled: false,
+    });
+    setGeneratorStatus('输出已关闭', 'pass');
+    $('generatorSummary').textContent = `CH${config.channel} 输出已关闭（${config.ip}）`;
+    $('generatorSummary').classList.remove('running', 'idle', 'fail');
+    $('generatorSummary').classList.add('pass');
+    log(`DG4102 CH${config.channel} 输出已关闭：${response.settings.output}`);
+  } catch (error) {
+    setGeneratorStatus('关闭失败', 'fail');
+    $('generatorSummary').textContent = `关闭信号发生器输出失败：${error.message}`;
+    $('generatorSummary').classList.remove('running', 'pass');
+    $('generatorSummary').classList.add('fail');
   }
 }
 
@@ -1293,6 +2363,21 @@ function onSivyTestResult(result) {
     state.sivyTestActiveSeq = null;
     log(`Sivy I2C 测试完成：${status}，匹配=${result.matchCount}，不匹配=${result.mismatchCount}，I2C 错误=${result.ioErrorCount}`);
     void readStatus().catch((error) => log(`Sivy 测试后刷新状态失败：${error.message}`));
+    const completion = state.sivyTestCompletion;
+    if (completion?.seq === result.seq) {
+      clearTimeout(completion.timer);
+      state.sivyTestCompletion = null;
+      completion.resolve({
+        status: result.status,
+        firmwarePassed,
+        referenceOutOfSync: state.sivyTestReferenceOutOfSync,
+        matchCount: result.matchCount,
+        mismatchCount: result.mismatchCount,
+        ioErrorCount: result.ioErrorCount,
+        totalCount: result.matchCount + result.mismatchCount + result.ioErrorCount,
+        result,
+      });
+    }
     return;
   }
 
@@ -1321,27 +2406,49 @@ async function startSivyTest(opcode) {
   clearSivyTestResults();
   state.sivyTestActiveSeq = seq;
   setSivyTestSummary('固件正在执行测试并回传结果…', 'running');
+  let resolveCompletion;
+  let rejectCompletion;
+  const completion = new Promise((resolve, reject) => {
+    resolveCompletion = resolve;
+    rejectCompletion = reject;
+  });
+  const timer = setTimeout(() => {
+    if (state.sivyTestCompletion?.seq !== seq) return;
+    state.sivyTestCompletion = null;
+    state.sivyTestActiveSeq = null;
+    setSivyTestSummary('等待 Sivy 测试汇总超时，请检查设备状态后重试。', 'fail');
+    rejectCompletion(new Error('等待 Sivy I2C 测试汇总超时'));
+  }, AUTOMATION_SIVY_TIMEOUT_MS);
+  state.sivyTestCompletion = {
+    seq,
+    resolve: resolveCompletion,
+    reject: rejectCompletion,
+    timer,
+  };
 
   try {
     await state.chars.sivyTestCtrl.writeValueWithResponse(packSivyTestCmd(seq, opcode));
   } catch (error) {
+    clearTimeout(timer);
+    state.sivyTestCompletion = null;
     state.sivyTestActiveSeq = null;
     setSivyTestSummary(`启动失败：${error.message}`, 'fail');
     throw error;
   }
 
   log(`Sivy I2C 测试已开始：序号=${seq}，操作码=${hex(opcode, 2)}`);
+  return completion;
 }
 
 async function runSivySnapshot() {
-  await startSivyTest(SIVY_TEST.SNAPSHOT);
+  return startSivyTest(SIVY_TEST.SNAPSHOT);
 }
 
 async function runSivySelectedInitWrite() {
   if (!$('sivyTestInitConfirm').checked) {
     throw new Error('请先确认允许写入 PW_CTRL（CPW_CTRL）[0x38] = 0x36DB');
   }
-  await startSivyTest(SIVY_TEST.SELECTED_INIT_WRITE);
+  return startSivyTest(SIVY_TEST.SELECTED_INIT_WRITE);
 }
 
 function exportSivyTestCsv() {
@@ -1672,11 +2779,18 @@ async function writeChannelRegisters(channel) {
     });
     if (!accepted) {
       setChannelSummary(channel, `${entry.name} 写入失败，未继续后续寄存器。`, 'fail');
-      return;
+      return {
+        submitted: false,
+        ioErrors: 1,
+        mismatches: 0,
+        failedRegister: entry.name,
+        status: response.status,
+      };
     }
   }
 
-  await readChannelRegisters(channel, { clear: false, expectedPlan: plan, skipPowerOn: true });
+  const readback = await readChannelRegisters(channel, { clear: false, expectedPlan: plan, skipPowerOn: true });
+  return { submitted: true, ...readback };
 }
 
 function exportChannelResults(channel) {
@@ -2556,6 +3670,229 @@ function drawChannel(samples, color, pad, plotW, plotH) {
   ctx.stroke();
 }
 
+function prepareScopeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = scopeCanvas.getBoundingClientRect();
+  const pixelWidth = Math.max(1, Math.floor(rect.width * dpr));
+  const pixelHeight = Math.max(1, Math.floor(rect.height * dpr));
+  if (scopeCanvas.width !== pixelWidth) scopeCanvas.width = pixelWidth;
+  if (scopeCanvas.height !== pixelHeight) scopeCanvas.height = pixelHeight;
+  scopeCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {
+    width: rect.width,
+    height: rect.height,
+    pad: { left: 54, right: 18, top: 18, bottom: 30 },
+  };
+}
+
+function drawScopeGrid({ width, height, pad }) {
+  scopeCtx.clearRect(0, 0, width, height);
+  scopeCtx.fillStyle = '#0d1726';
+  scopeCtx.fillRect(0, 0, width, height);
+  const plotW = Math.max(1, width - pad.left - pad.right);
+  const plotH = Math.max(1, height - pad.top - pad.bottom);
+
+  scopeCtx.strokeStyle = 'rgba(139, 176, 220, 0.15)';
+  scopeCtx.lineWidth = 1;
+  for (let i = 0; i <= 10; i += 1) {
+    const x = pad.left + (plotW * i) / 10;
+    scopeCtx.beginPath();
+    scopeCtx.moveTo(x, pad.top);
+    scopeCtx.lineTo(x, pad.top + plotH);
+    scopeCtx.stroke();
+  }
+  for (let i = 0; i <= 8; i += 1) {
+    const y = pad.top + (plotH * i) / 8;
+    scopeCtx.beginPath();
+    scopeCtx.moveTo(pad.left, y);
+    scopeCtx.lineTo(width - pad.right, y);
+    scopeCtx.stroke();
+  }
+
+  return { plotW, plotH };
+}
+
+function drawScopeBleSamples() {
+  const layout = prepareScopeCanvas();
+  const { plotW, plotH } = drawScopeGrid(layout);
+  const samples = state.samples.slice(-300);
+
+  scopeCtx.fillStyle = 'rgba(229, 236, 247, 0.7)';
+  scopeCtx.font = '11px "SF Mono", Consolas, monospace';
+  scopeCtx.fillText('3300 mV', 7, layout.pad.top + 4);
+  scopeCtx.fillText('0 mV', 22, layout.pad.top + plotH + 4);
+
+  const drawChannel = (channelSamples, color) => {
+    if (channelSamples.length === 0) return;
+    const minT = channelSamples[0].timestampUs;
+    const maxT = channelSamples[channelSamples.length - 1].timestampUs;
+    const span = Math.max(1, maxT - minT);
+    scopeCtx.strokeStyle = color;
+    scopeCtx.lineWidth = 2;
+    scopeCtx.beginPath();
+    channelSamples.forEach((sample, index) => {
+      const value = (sample.flags & 0x01) ? sample.mv : sample.raw;
+      const y = layout.pad.top + plotH - (Math.max(0, Math.min(3300, value)) / 3300) * plotH;
+      const x = layout.pad.left + ((sample.timestampUs - minT) / span) * plotW;
+      if (index === 0) scopeCtx.moveTo(x, y);
+      else scopeCtx.lineTo(x, y);
+    });
+    scopeCtx.stroke();
+  };
+
+  drawChannel(samples.filter((sample) => sample.channel === 0), '#4ea1ff');
+  drawChannel(samples.filter((sample) => sample.channel === 1), '#4ed08b');
+  scopeCtx.fillStyle = '#4ea1ff';
+  scopeCtx.fillText('CH0', layout.pad.left + 8, layout.pad.top + 14);
+  scopeCtx.fillStyle = '#4ed08b';
+  scopeCtx.fillText('CH1', layout.pad.left + 52, layout.pad.top + 14);
+}
+
+function normalizeScopeChannels(frame) {
+  const rawChannels = Array.isArray(frame?.channels)
+    ? frame.channels
+    : Array.isArray(frame?.traces)
+      ? frame.traces
+      : [];
+  const channels = [];
+
+  for (const [index, rawChannel] of rawChannels.entries()) {
+    if (!rawChannel || typeof rawChannel !== 'object') continue;
+    const rawPoints = Array.isArray(rawChannel.samples)
+      ? rawChannel.samples
+      : Array.isArray(rawChannel.points)
+        ? rawChannel.points
+        : null;
+    if (!rawPoints || rawPoints.length < 2) continue;
+
+    const xStart = Number(rawChannel.xStart ?? rawChannel.t0 ?? 0);
+    const xStep = Number(rawChannel.xStep ?? rawChannel.dt ?? 1);
+    const points = [];
+    for (const [pointIndex, point] of rawPoints.entries()) {
+      let x;
+      let y;
+      if (Array.isArray(point)) {
+        x = Number(point[0]);
+        y = Number(point[1]);
+      } else if (point && typeof point === 'object') {
+        x = Number(point.x ?? (xStart + pointIndex * xStep));
+        y = Number(point.y);
+      } else {
+        x = xStart + pointIndex * xStep;
+        y = Number(point);
+      }
+      if (Number.isFinite(x) && Number.isFinite(y)) points.push({ x, y });
+    }
+    if (points.length < 2) continue;
+    channels.push({
+      label: String(rawChannel.name || rawChannel.label || `CH${index + 1}`),
+      unit: String(rawChannel.unit || frame.unit || ''),
+      color: String(rawChannel.color || ['#4ea1ff', '#4ed08b', '#ffd166', '#ff7a90'][index % 4]),
+      points,
+    });
+  }
+
+  if (channels.length === 0) {
+    throw new Error('外部示波器数据格式无效：channels[].samples 或 channels[].points 至少需要两个数值');
+  }
+  return channels;
+}
+
+function drawExternalScopeFrame(frame) {
+  const channels = normalizeScopeChannels(frame);
+  const layout = prepareScopeCanvas();
+  const { plotW, plotH } = drawScopeGrid(layout);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const channel of channels) {
+    for (const point of channel.points) {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    }
+  }
+  if (minX === maxX) maxX = minX + 1;
+  if (minY === maxY) {
+    minY -= 0.5;
+    maxY += 0.5;
+  }
+  const yPadding = (maxY - minY) * 0.08;
+  minY -= yPadding;
+  maxY += yPadding;
+
+  scopeCtx.fillStyle = 'rgba(229, 236, 247, 0.7)';
+  scopeCtx.font = '10px "SF Mono", Consolas, monospace';
+  scopeCtx.fillText(maxY.toPrecision(4), 5, layout.pad.top + 4);
+  scopeCtx.fillText(minY.toPrecision(4), 5, layout.pad.top + plotH + 4);
+
+  for (const channel of channels) {
+    scopeCtx.strokeStyle = channel.color;
+    scopeCtx.lineWidth = 1.8;
+    scopeCtx.beginPath();
+    channel.points.forEach((point, index) => {
+      const x = layout.pad.left + ((point.x - minX) / (maxX - minX)) * plotW;
+      const y = layout.pad.top + plotH - ((point.y - minY) / (maxY - minY)) * plotH;
+      if (index === 0) scopeCtx.moveTo(x, y);
+      else scopeCtx.lineTo(x, y);
+    });
+    scopeCtx.stroke();
+  }
+
+  let legendX = layout.pad.left + 8;
+  for (const channel of channels) {
+    scopeCtx.fillStyle = channel.color;
+    scopeCtx.fillText(`${channel.label}${channel.unit ? ` (${channel.unit})` : ''}`, legendX, layout.pad.top + 14);
+    legendX += Math.max(68, channel.label.length * 9 + 28);
+  }
+}
+
+function drawScopeScreenshot(image) {
+  const layout = prepareScopeCanvas();
+  drawScopeGrid(layout);
+  const scale = Math.min(
+    layout.width / image.naturalWidth,
+    layout.height / image.naturalHeight,
+  );
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  scopeCtx.drawImage(
+    image,
+    (layout.width - drawWidth) / 2,
+    (layout.height - drawHeight) / 2,
+    drawWidth,
+    drawHeight,
+  );
+}
+
+function drawScopeMonitor() {
+  const hasBleSamples = state.scope.source === 'ble' && state.samples.length > 0;
+  const hasExternalFrame = state.scope.source === 'websocket' && state.scope.frame;
+  const hasScreenshot = state.scope.source === 'websocket' && state.scope.screenshot;
+  $('scopeEmpty').classList.toggle('hidden', Boolean(hasBleSamples || hasExternalFrame || hasScreenshot));
+
+  if (hasBleSamples) {
+    drawScopeBleSamples();
+  } else if (hasScreenshot) {
+    drawScopeScreenshot(state.scope.screenshot);
+  } else if (hasExternalFrame) {
+    try {
+      drawExternalScopeFrame(state.scope.frame);
+    } catch (error) {
+      log(error.message);
+      state.scope.frame = null;
+      const layout = prepareScopeCanvas();
+      drawScopeGrid(layout);
+      $('scopeEmpty').classList.remove('hidden');
+    }
+  } else {
+    const layout = prepareScopeCanvas();
+    drawScopeGrid(layout);
+  }
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -3152,13 +4489,45 @@ function bindUi() {
   initializeChannelControls();
   initLanguageControl();
   ensureProfileEntries();
+  restoreScopeSettings();
+  restoreGeneratorSettings();
   updateDeviceFilterUi();
   updateRuntimeEnvironment();
   setConnected(false);
+  resetAutomationUi();
   log(`网页测试控制台版本 ${WEB_CONSOLE_BUILD}`);
   $('deviceFilterMode').addEventListener('change', updateDeviceFilterUi);
   $('connectBtn').addEventListener('click', () => run(connect));
   $('disconnectBtn').addEventListener('click', () => run(disconnect));
+  $('autoRunBtn').addEventListener('click', () => run(runAutomatedWorkflow));
+  $('scopeSourceOption').addEventListener('change', () => setScopeSource($('scopeSourceOption').value));
+  $('scopeConnectBtn').addEventListener('click', () => run(toggleScopeStream));
+  $('scopeClearBtn').addEventListener('click', clearScopeMonitor);
+  $('scopeFullscreenBtn').addEventListener('click', () => run(toggleScopeFullscreen));
+  $('scopeInstrumentIp').addEventListener('input', () => {
+    saveScopeSettings();
+    if (!state.scope.socket) syncScopeControls();
+  });
+  $('scopeRefreshInterval').addEventListener('change', saveScopeSettings);
+  $('scopeStreamUrl').addEventListener('change', saveScopeSettings);
+  $('scopeAccessKey').addEventListener('change', saveScopeSettings);
+  $('scopeAccessKey').addEventListener('input', saveScopeSettings);
+  $('generatorApplyBtn').addEventListener('click', () => run(applyGenerator));
+  $('generatorReadBtn').addEventListener('click', () => run(readGenerator));
+  $('generatorOutputOffBtn').addEventListener('click', () => run(disableGeneratorOutput));
+  for (const id of [
+    'generatorIp', 'generatorChannel', 'generatorWaveform',
+    'generatorAmplitude', 'generatorFrequency', 'generatorLoad',
+  ]) {
+    $(id).addEventListener('input', () => {
+      saveGeneratorSettings();
+      renderGeneratorPreview();
+    });
+    $(id).addEventListener('change', () => {
+      saveGeneratorSettings();
+      renderGeneratorPreview();
+    });
+  }
   $('refreshBtn').addEventListener('click', () => run(readStatus));
   $('readConfigBtn').addEventListener('click', () => run(readConfig));
   $('writeConfigBtn').addEventListener('click', () => run(writeConfig));
@@ -3240,6 +4609,8 @@ function bindUi() {
     $('sampleCount').textContent = '0 个采样';
     $('latestSample').textContent = '最新值：--';
     drawSamples();
+    updateScopeBleStatus();
+    drawScopeMonitor();
   });
   for (const button of document.querySelectorAll('.segment')) {
     button.addEventListener('click', () => setMode(button.dataset.mode));
@@ -3266,8 +4637,19 @@ function bindUi() {
       log(`OTA 加载失败：${error.message}`);
     }
   });
-  window.addEventListener('resize', drawSamples);
+  window.addEventListener('resize', () => {
+    drawSamples();
+    drawScopeMonitor();
+  });
+  document.addEventListener('fullscreenchange', updateScopeFullscreenButton);
+  window.addEventListener('beforeunload', () => {
+    state.scope.socket?.close();
+    closeVideoDecoder();
+  });
   drawSamples();
+  drawScopeMonitor();
+  syncScopeControls();
+  renderGeneratorPreview();
   localizeDocumentText();
 }
 

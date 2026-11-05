@@ -7,7 +7,8 @@
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sivy ASC Register Console</title>
-  <link rel="stylesheet" href="./styles.css?v=20260815-four-channel-pll-output">
+  <link rel="icon" type="image/svg+xml" href="./assets/sivy_logo.svg?v=20260629-logo">
+  <link rel="stylesheet" href="./styles.css?v=20261105-rigol-secure-manual">
 </head>
 <body>
   <main class="shell">
@@ -64,6 +65,177 @@
       <div class="runtime-item">
         <span>蓝牙适配器</span>
         <strong id="runtimeAdapter">本机蓝牙</strong>
+      </div>
+    </section>
+
+    <section class="panel workflow-panel" aria-labelledby="workflowTitle">
+      <div class="workflow-layout">
+        <div class="workflow-runner">
+          <div class="workflow-heading">
+            <div>
+              <p class="eyebrow">ONE-CLICK BRING-UP</p>
+              <h2 id="workflowTitle">一键自动测试</h2>
+            </div>
+            <button id="autoRunBtn" class="primary auto-run-btn" type="button">一键连接并测试</button>
+          </div>
+          <p class="workflow-intro">
+            依次连接 Sivy 蓝牙设备、执行 I²C 参考测试，并只配置 CH0 的 32 mV 阈值。
+            浏览器出于安全限制要求在选择器中人工点选一次 Sivy 设备，其余步骤自动完成。
+          </p>
+          <ol class="auto-step-list" aria-live="polite">
+            <li id="autoStepConnect" class="auto-step pending">
+              <span class="auto-step-index">1</span>
+              <div class="auto-step-copy">
+                <div class="auto-step-title">
+                  <strong>连接目标蓝牙设备</strong>
+                  <span id="autoConnectStatus" class="auto-status pending">待执行</span>
+                </div>
+                <p id="autoConnectDetail">名称以 Sivy 开头；目标地址 C3:09:E1:7D:0D:08</p>
+              </div>
+            </li>
+            <li id="autoStepIic" class="auto-step pending">
+              <span class="auto-step-index">2</span>
+              <div class="auto-step-copy">
+                <div class="auto-step-title">
+                  <strong>Sivy I²C 参考测试</strong>
+                  <span id="autoIicStatus" class="auto-status pending">等待上一步</span>
+                </div>
+                <p id="autoIicDetail">仅数值不匹配时给出警告并继续；I²C 通信错误会中止流程。</p>
+              </div>
+            </li>
+            <li id="autoStepCh0" class="auto-step pending">
+              <span class="auto-step-index">3</span>
+              <div class="auto-step-copy">
+                <div class="auto-step-title">
+                  <strong>配置 CH0 并回读校验</strong>
+                  <span id="autoCh0Status" class="auto-status pending">等待上一步</span>
+                </div>
+                <p id="autoCh0Detail">勾选可写位确认，设置阈值 32 mV，执行掩码写入和四项寄存器回读。</p>
+              </div>
+            </li>
+          </ol>
+          <div class="workflow-progress">
+            <progress id="autoProgress" value="0" max="3" aria-label="自动测试进度"></progress>
+            <p id="autoOverallStatus" class="workflow-status idle" role="status">
+              待执行。蓝牙连接、测试结果和 CH0 回读会依次显示在这里。
+            </p>
+          </div>
+
+          <section class="generator-panel" aria-labelledby="generatorTitle">
+            <div class="generator-heading">
+              <div>
+                <p class="eyebrow">SIGNAL SOURCE</p>
+                <h3 id="generatorTitle">信号发生器 RIGOL DG4102</h3>
+              </div>
+              <span id="generatorStatus" class="auto-status pending" role="status" aria-live="polite">未连接</span>
+            </div>
+            <p class="generator-description">
+              默认 CH1、三角波、1 Vpp、1 kHz。调整后点击一次即可写入并打开输出。
+            </p>
+            <div class="generator-grid">
+              <label>信号发生器 IP
+                <input id="generatorIp" type="text" inputmode="decimal" value="192.168.110.11" autocomplete="off">
+              </label>
+              <label>输出通道
+                <select id="generatorChannel">
+                  <option value="1" selected>CH1</option>
+                  <option value="2">CH2</option>
+                </select>
+              </label>
+              <label>波形
+                <select id="generatorWaveform">
+                  <option value="triangle" selected>三角波</option>
+                  <option value="sine">正弦波</option>
+                  <option value="square">方波</option>
+                  <option value="pulse">脉冲</option>
+                </select>
+              </label>
+              <label>幅值（Vpp）
+                <input id="generatorAmplitude" type="number" min="0.001" max="20" step="0.001" value="1">
+              </label>
+              <label>频率（Hz）
+                <input id="generatorFrequency" type="number" min="0.001" max="50000000" step="0.001" value="1000">
+              </label>
+              <label>输出负载
+                <select id="generatorLoad">
+                  <option value="INF" selected>高阻（High-Z）</option>
+                  <option value="50">50 Ω</option>
+                </select>
+              </label>
+            </div>
+            <div class="button-row generator-actions">
+              <button id="generatorApplyBtn" type="button" class="primary">应用并打开输出</button>
+              <button id="generatorReadBtn" type="button">读取当前设置</button>
+              <button id="generatorOutputOffBtn" type="button">关闭当前通道</button>
+            </div>
+            <p id="generatorSummary" class="generator-summary idle">
+              CH1 · 三角波 · 1 Vpp · 1 kHz · 高阻；尚未发送到仪器。
+            </p>
+            <p class="generator-note">
+              方波和脉冲默认使用 50% 占空比；三角波使用固定 50% 对称度。该操作不会加入一键自动测试。
+            </p>
+          </section>
+        </div>
+
+        <section class="live-monitor" aria-labelledby="liveMonitorTitle">
+          <div class="live-monitor-head">
+            <div>
+              <p class="eyebrow">LIVE SIGNAL</p>
+              <h2 id="liveMonitorTitle">实时波形监视</h2>
+            </div>
+            <span id="scopeConnectionStatus" class="auto-status pending" role="status" aria-live="polite">BLE 待连接</span>
+          </div>
+          <div id="scopeStage" class="scope-stage">
+            <canvas id="scopeCanvas" class="scope-canvas" width="840" height="300" aria-label="实时波形"></canvas>
+            <div id="scopeEmpty" class="scope-empty">
+              <strong>等待 RIGOL 实时画面</strong>
+              <span>连接示波器后直接显示原厂 H.264 图像流。</span>
+            </div>
+          </div>
+          <div class="scope-meta">
+            <span id="scopeSourceLabel">数据源：RIGOL MHO 5054 · 192.168.110.10</span>
+            <span id="scopeFrameInfo">尚无数据帧</span>
+            <div class="scope-meta-actions">
+              <button id="scopeFullscreenBtn" type="button">全屏显示</button>
+              <button id="scopeClearBtn" type="button">清空画面</button>
+            </div>
+          </div>
+          <div class="scope-controls">
+            <label hidden>显示源
+              <select id="scopeSourceOption">
+                <option value="video" selected>RIGOL 高帧率实时画面</option>
+              </select>
+            </label>
+            <label>示波器 IP
+              <input id="scopeInstrumentIp" type="text" inputmode="decimal" value="192.168.110.10" autocomplete="off">
+            </label>
+            <label id="scopeRefreshLabel" hidden>截图刷新间隔
+              <select id="scopeRefreshInterval">
+                <option value="250">0.25 秒（约 4 帧/秒）</option>
+                <option value="500" selected>0.5 秒</option>
+                <option value="1000">1 秒</option>
+                <option value="2000">2 秒</option>
+                <option value="5000">5 秒</option>
+              </select>
+            </label>
+          </div>
+          <div class="scope-bridge-row">
+            <label class="scope-url-field">数据桥地址
+              <input id="scopeStreamUrl" type="url" value="ws://127.0.0.1:8765">
+            </label>
+            <label class="scope-key-field">访问密钥
+              <input id="scopeAccessKey" type="password" placeholder="本机桥可留空" autocomplete="off">
+            </label>
+            <button id="scopeConnectBtn" type="button">连接示波器</button>
+          </div>
+          <p class="scope-connection-hint">
+            本机使用保持 ws://127.0.0.1:8765；公网桥应填写 wss:// 地址和访问密钥。使用前请手动运行 start-scope-bridge.cmd。
+          </p>
+          <div class="instrument-notice">
+            <strong>RIGOL MHO 5054 · 192.168.110.10</strong>
+            <span>默认直接播放示波器 H.264 实时画面；截图模式仅用于兼容排查。MAC 仅用于核对，连接使用 IP。</span>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -549,7 +721,7 @@
         </div>
       </section>
 
-      <section class="panel sample-panel">
+      <section class="panel sample-panel" hidden>
         <div class="panel-head">
           <h2>采样</h2>
           <div class="sample-actions">
@@ -598,6 +770,6 @@
     </section>
   </main>
 
-  <script src="./app.js?v=20260815-four-channel-pll-output"></script>
+  <script src="./app.js?v=20261105-rigol-secure-manual"></script>
 </body>
 </html>
