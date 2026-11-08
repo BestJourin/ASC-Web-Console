@@ -218,6 +218,9 @@ const state = {
   otaInfo: null,
   otaSourceModifiedMs: 0,
   bluetoothReady: false,
+  bleKeepConnected: false,
+  bleReconnectTimer: 0,
+  bleReconnectAttempt: 0,
   autoTest: {
     running: false,
     currentStep: null,
@@ -225,6 +228,9 @@ const state = {
   scope: {
     source: 'video',
     socket: null,
+    keepConnected: false,
+    reconnectTimer: 0,
+    reconnectAttempt: 0,
     frame: null,
     screenshot: null,
     frameCount: 0,
@@ -1131,7 +1137,7 @@ function updateStatus(status) {
   $('bleDropValue').textContent = `${status.bleCongested}/${status.sampleDrop}`;
 }
 
-async function connect({ requestOptions = null, requireSivyName = false } = {}) {
+async function connect({ requestOptions = null, requireSivyName = false, deviceOverride = null } = {}) {
   if (!state.bluetoothReady) {
     throw new Error('网页蓝牙需要使用桌面版 Chrome/Edge 的 HTTPS 或本地主机页面');
   }
@@ -1144,13 +1150,16 @@ async function connect({ requestOptions = null, requireSivyName = false } = {}) 
     throw new Error('当前浏览器不支持网页蓝牙，请使用 Android Chrome/Edge/Samsung Internet 或桌面版 Chrome/Edge');
   }
 
-  log(`正在打开蓝牙设备选择器：${requestOptions ? `名称前缀“${AUTOMATION_DEVICE_NAME_PREFIX}”` : describeDeviceFilter()}`);
-  if (requireSivyName) {
-    log(`浏览器选择器中，请选择名称以 ${AUTOMATION_DEVICE_NAME_PREFIX} 开头的设备；浏览器不提供蓝牙 MAC 地址，选择时请核对目标地址 ${AUTOMATION_TARGET_ADDRESS}。`);
-  } else {
-    log('如果目标设备不出现：先确认手机/nRF Connect 已断开，再保持“全部设备”模式重新点击连接。');
+  let device = deviceOverride;
+  if (!device) {
+    log(`正在打开蓝牙设备选择器：${requestOptions ? `名称前缀“${AUTOMATION_DEVICE_NAME_PREFIX}”` : describeDeviceFilter()}`);
+    if (requireSivyName) {
+      log(`浏览器选择器中，请选择名称以 ${AUTOMATION_DEVICE_NAME_PREFIX} 开头的设备；浏览器不提供 MAC 地址，选择时请核对目标地址 ${AUTOMATION_TARGET_ADDRESS}。`);
+    } else {
+      log('如果目标设备不出现：先确认手机/nRF Connect 已断开，再保持“全部设备”模式重新点击连接。');
+    }
+    device = await navigator.bluetooth.requestDevice(requestOptions || buildBluetoothRequestOptions());
   }
-  const device = await navigator.bluetooth.requestDevice(requestOptions || buildBluetoothRequestOptions());
   if (requireSivyName && !isSivyDeviceName(device.name)) {
     throw new Error(`当前连接不是 Sivy 设备：${device.name || '未命名设备'}。请重新选择名称以 Sivy 开头的目标板。`);
   }
@@ -1160,9 +1169,12 @@ async function connect({ requestOptions = null, requireSivyName = false } = {}) 
       throw new Error(`所选设备地址 ${exposedAddress} 与目标地址 ${AUTOMATION_TARGET_ADDRESS} 不一致`);
     }
   }
+  state.bleKeepConnected = true;
   log(`已选择蓝牙设备：${device.name || '未命名'} / ${device.id || '无标识'}`);
 
-  device.addEventListener('gattserverdisconnected', onDisconnected);
+  if (state.device !== device) {
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+  }
   const server = await device.gatt.connect();
   let ascService;
   try {
@@ -1209,6 +1221,7 @@ async function connect({ requestOptions = null, requireSivyName = false } = {}) 
   }
 
   setConnected(true);
+  state.bleReconnectAttempt = 0;
   log(`已连接到 ${device.name || device.id || '未命名蓝牙设备'}`);
   await readConfig();
   await readStatus();
@@ -1231,9 +1244,35 @@ function onDisconnected() {
   }
   state.pendingReg.clear();
   log('设备已断开连接');
+  if (state.bleKeepConnected && state.device) scheduleBleReconnect();
+}
+
+function scheduleBleReconnect() {
+  if (!state.bleKeepConnected || !state.device || state.bleReconnectTimer) return;
+  const attempt = state.bleReconnectAttempt + 1;
+  state.bleReconnectAttempt = attempt;
+  const delayMs = Math.min(10000, 1000 * (2 ** Math.min(attempt - 1, 3)));
+  log(`设备连接已中断，将在 ${Math.round(delayMs / 1000)} 秒后自动重连（第 ${attempt} 次）`);
+  state.bleReconnectTimer = window.setTimeout(async () => {
+    state.bleReconnectTimer = 0;
+    if (!state.bleKeepConnected || !state.device) return;
+    try {
+      await connect({ deviceOverride: state.device });
+      log('设备已自动重连');
+    } catch (error) {
+      log(`设备自动重连失败：${error.message}`);
+      scheduleBleReconnect();
+    }
+  }, delayMs);
 }
 
 async function disconnect() {
+  state.bleKeepConnected = false;
+  state.bleReconnectAttempt = 0;
+  if (state.bleReconnectTimer) {
+    clearTimeout(state.bleReconnectTimer);
+    state.bleReconnectTimer = 0;
+  }
   if (state.device?.gatt?.connected) {
     state.device.gatt.disconnect();
   }
@@ -1446,8 +1485,8 @@ function saveScopeSettings() {
 
 function syncScopeControls() {
   const external = state.scope.source === 'video' || state.scope.source === 'websocket';
-  const socketReady = state.scope.socket
-    && (state.scope.socket.readyState === WebSocket.OPEN || state.scope.socket.readyState === WebSocket.CONNECTING);
+  const socketReady = state.scope.keepConnected || (state.scope.socket
+    && (state.scope.socket.readyState === WebSocket.OPEN || state.scope.socket.readyState === WebSocket.CONNECTING));
   const videoMode = state.scope.source === 'video';
   const sourceOption = $('scopeSourceOption');
   if (!sourceOption) return;
@@ -1470,10 +1509,12 @@ function syncScopeControls() {
 
   if (socketReady) {
     $('scopeConnectBtn').textContent = '断开示波器';
-    if (state.scope.socket.readyState === WebSocket.OPEN) {
+    if (state.scope.socket?.readyState === WebSocket.OPEN) {
       setScopeStatus('示波器在线', 'pass');
-    } else {
+    } else if (state.scope.socket?.readyState === WebSocket.CONNECTING) {
       setScopeStatus('连接中', 'running');
+    } else {
+      setScopeStatus('示波器重连中', 'running');
     }
   } else {
     $('scopeConnectBtn').textContent = '连接示波器';
@@ -1497,7 +1538,7 @@ function updateScopeBleStatus() {
 
 function setScopeSource(source) {
   if (source !== 'video' && source !== 'websocket') return;
-  if (state.scope.socket) disconnectScopeStream();
+  if (state.scope.socket || state.scope.keepConnected) disconnectScopeStream();
   closeVideoDecoder();
   state.scope.source = source;
   state.scope.frame = null;
@@ -1509,7 +1550,30 @@ function setScopeSource(source) {
   drawScopeMonitor();
 }
 
-function disconnectScopeStream() {
+function scheduleScopeReconnect() {
+  if (!state.scope.keepConnected || state.scope.socket || state.scope.reconnectTimer) return;
+  const attempt = state.scope.reconnectAttempt + 1;
+  state.scope.reconnectAttempt = attempt;
+  const delayMs = Math.min(10000, 1000 * (2 ** Math.min(attempt - 1, 3)));
+  setScopeStatus('示波器重连中', 'running');
+  log(`示波器连接已中断，将在 ${Math.round(delayMs / 1000)} 秒后自动重连（第 ${attempt} 次）`);
+  state.scope.reconnectTimer = window.setTimeout(() => {
+    state.scope.reconnectTimer = 0;
+    if (!state.scope.keepConnected || state.scope.socket) return;
+    connectScopeStream().catch((error) => {
+      log(`示波器自动重连失败：${error.message}`);
+      scheduleScopeReconnect();
+    });
+  }, delayMs);
+}
+
+function disconnectScopeStream(manual = true) {
+  if (manual) state.scope.keepConnected = false;
+  if (manual) state.scope.reconnectAttempt = 0;
+  if (manual && state.scope.reconnectTimer) {
+    clearTimeout(state.scope.reconnectTimer);
+    state.scope.reconnectTimer = 0;
+  }
   const socket = state.scope.socket;
   state.scope.socket = null;
   if (socket && socket.readyState < WebSocket.CLOSING) {
@@ -1552,6 +1616,10 @@ async function connectScopeStream() {
   if (accessKey) url.searchParams.set('key', accessKey);
   saveScopeSettings();
   const socket = new WebSocket(url.href);
+  if (state.scope.reconnectTimer) {
+    clearTimeout(state.scope.reconnectTimer);
+    state.scope.reconnectTimer = 0;
+  }
   if (state.scope.source === 'video') socket.binaryType = 'arraybuffer';
   state.scope.socket = socket;
   state.scope.frame = null;
@@ -1568,6 +1636,7 @@ async function connectScopeStream() {
     if (state.scope.socket !== socket) return;
     socketOpened = true;
     if (state.scope.source === 'video') {
+      state.scope.reconnectAttempt = 0;
       setScopeStatus('等待 H.264 视频流', 'running');
       log(`高帧率视频桥已连接：RIGOL MHO 5054 / ${scopeIp}:9001`);
     } else {
@@ -1599,8 +1668,8 @@ async function connectScopeStream() {
   });
   socket.addEventListener('error', () => {
     if (state.scope.socket !== socket) return;
-    setScopeStatus('连接失败', 'fail');
-    log(`连接示波器失败：请确认数据桥已启动，访问密钥、示波器 IP 和网络配置正确（${scopeIp}）`);
+    setScopeStatus('示波器重连中', 'running');
+    log(`示波器连接暂时中断，将自动重连（${scopeIp}）`);
   });
   socket.addEventListener('close', () => {
     if (state.scope.socket !== socket) return;
@@ -1608,10 +1677,11 @@ async function connectScopeStream() {
     closeVideoDecoder();
     syncScopeControls();
     if (!socketOpened) {
-      setScopeStatus('连接失败 · 请检查数据桥和访问密钥', 'fail');
+      setScopeStatus('示波器重连中', 'running');
     } else {
-      setScopeStatus('示波器已断开', 'pending');
+      setScopeStatus('示波器重连中', 'running');
     }
+    scheduleScopeReconnect();
   });
 }
 
@@ -1906,9 +1976,11 @@ function clearScopeMonitor() {
 }
 
 async function toggleScopeStream() {
-  if (state.scope.socket) {
+  if (state.scope.socket || state.scope.keepConnected) {
     disconnectScopeStream();
   } else {
+    state.scope.keepConnected = true;
+    state.scope.reconnectAttempt = 0;
     await connectScopeStream();
   }
 }

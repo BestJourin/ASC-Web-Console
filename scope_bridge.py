@@ -147,7 +147,12 @@ class RigolGenerator:
 
         commands = [
             f":OUTPut{channel}:LOAD {'INFinity' if load == 'INF' else '50'}",
-            f":SOURce{channel}:FUNCtion:{self.WAVEFORMS[waveform][0]}",
+            # DG4102 selects the waveform through the SHAPe command and
+            # takes the waveform name as its argument.  Sending a waveform
+            # name as a command path (for example FUNCtion:RAMP) is ignored
+            # by the instrument, leaving the previous/default SIN waveform
+            # active and causing the readback check to fail.
+            f":SOURce{channel}:FUNCtion:SHAPe {self.WAVEFORMS[waveform][0]}",
             f":SOURce{channel}:VOLTage:UNIT VPP",
             f":SOURce{channel}:VOLTage {amplitude_vpp:.9g}",
             f":SOURce{channel}:VOLTage:OFFSet 0",
@@ -176,7 +181,10 @@ class RigolGenerator:
         }
         expected_waveform = {"triangle": "RAMP", "sine": "SIN", "square": "SQU", "pulse": "PULS"}[waveform]
         if not str(settings["waveform"]).upper().startswith(expected_waveform):
-            raise RuntimeError(f"Waveform readback mismatch: {settings['waveform']}")
+            raise RuntimeError(
+                f"Waveform readback mismatch: expected {expected_waveform}, "
+                f"got {settings['waveform']}"
+            )
         if abs(settings["amplitudeVpp"] - amplitude_vpp) > max(0.001, amplitude_vpp * 0.001):
             raise RuntimeError(f"Amplitude readback mismatch: {settings['amplitudeVpp']} Vpp")
         if abs(settings["frequencyHz"] - frequency_hz) > max(0.001, frequency_hz * 0.001):
@@ -281,7 +289,7 @@ class WebSocketClient:
 class UpstreamWebSocket:
     """Minimal WebSocket client for RIGOL's local H.264 screen stream."""
 
-    def __init__(self, ip: str, port: int, timeout_s: float = 8.0) -> None:
+    def __init__(self, ip: str, port: int, timeout_s: float = 30.0) -> None:
         self.connection = socket.create_connection((ip, port), timeout=timeout_s)
         self.connection.settimeout(timeout_s)
         self.stream = self.connection.makefile("rb")
@@ -308,18 +316,20 @@ class UpstreamWebSocket:
         if b" 101 " not in status_line:
             raise ConnectionError(f"RIGOL video WebSocket rejected: {status_line.decode('latin-1')}")
 
-    def send_text(self, text: str) -> None:
-        payload = text.encode("utf-8")
+    def send_frame(self, opcode: int, payload: bytes = b"") -> None:
         mask = os.urandom(4)
         masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
         length = len(payload)
         if length < 126:
-            header = bytes((0x81, 0x80 | length))
+            header = bytes((0x80 | opcode, 0x80 | length))
         elif length <= 0xFFFF:
-            header = bytes((0x81, 0x80 | 126)) + struct.pack("!H", length)
+            header = bytes((0x80 | opcode, 0x80 | 126)) + struct.pack("!H", length)
         else:
-            header = bytes((0x81, 0x80 | 127)) + struct.pack("!Q", length)
+            header = bytes((0x80 | opcode, 0x80 | 127)) + struct.pack("!Q", length)
         self.connection.sendall(header + mask + masked)
+
+    def send_text(self, text: str) -> None:
+        self.send_frame(1, text.encode("utf-8"))
 
     def read_frame(self) -> tuple[int, bytes]:
         first, second = read_exact(self.stream, 2)
@@ -678,7 +688,10 @@ class ScopeBridgeHandler(BaseHTTPRequestHandler):
                 elif opcode == 8:
                     break
                 elif opcode == 9:
-                    client.send_frame(10, payload)
+                    # The ping originated from the oscilloscope. Reply on
+                    # the upstream connection; forwarding a pong to the
+                    # browser does not keep the instrument session alive.
+                    upstream.send_frame(10, payload)
         except (ConnectionError, OSError, EOFError, ValueError) as error:
             try:
                 client.send_json({
